@@ -1,0 +1,73 @@
+Here is a small list of what to test with the run executable:
+In any case, you might want to use -shell-verbose or -shell-echo
+to have a better idea of what is happening.
+
+UNEMBEDDED MODE
+---------------
+
+this mode uses a shared OCaml compiler found in the path,
+and need -I option to find its needed cmi files
+
+./run.exe
+  default command, it loads 3 config files without errors
+
+./run.exe -error
+  try to load config_v1_error.ml which is not well typed
+  fail with a proper type error message
+
+./run.exe -n -v1 config/config_01.ml
+  try to load without adding the -I flags to the cmi
+  this fail with an Unbound module
+
+./run.exe -n -I . -I ../lib -v1 config/config_01.ml
+  work well
+
+./run.exe -n -I . -I ../lib -v2 config/config_02.ml
+  should not work because config_v2 uses some utility functions
+  defined in config/config_util.ml
+  fail with undefined symbols
+
+./run.exe -n -I . -I ../lib -f config/config_util.ml -v2 config/config_02.ml
+  work well
+
+You can use -tmp as well as -clean if you are not interested in seeing
+the copied files and the compilation directory.
+
+STANDALONE MODE
+---------------
+
+This mode is more tricky, it uses an ocamlopt embedded in the executable
+as well as cmi files so that the resulting executable do not need
+any of them.
+
+For that purpose, you need to enrich the executable run.exe using
+the tool provided in the bin/ directory:
+
+../bin/ocaml_embed_compiler.exe -exe run.exe -cc $(which ocamlopt) dsl.cmi ../lib/ocaml_plugin.cmi -o run-standalone.exe
+
+Then, you can try:
+
+./run-standalone.exe -embed
+  work well
+
+./run.exe -embed
+  fail during the extraction of embedded section since the executable is not
+  standalone
+
+You can try also to forget an cmi file and see what happen
+
+../bin/ocaml_embed_compiler.exe -exe run.exe -cc $(which ocamlopt) ../lib/ocaml_plugin.cmi -o run-standalone.exe
+./run-standalone.exe -embed
+  fail with an unbound module (dsl.cmi is missing)
+
+BUILD RULES
+-----------
+
+Now, we have a dedicated build rule to build standalone executable.
+Cf OMakefile: OCamlMakeStandaloneExecutables
+
+-------------
+You can also try with some more config files.
+
+Cheers,
+Mathieu Barbin
