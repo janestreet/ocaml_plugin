@@ -80,3 +80,17 @@ Executable "sample-standalone"
   Path:               sample
   BuildDepends:       ocaml_plugin,sexplib.syntax,threads
   CompiledObject:     native
+
+Executable "test"
+  Install:            false
+  MainIs:             plugin_loader.ml
+  Path:               test
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  CompiledObject:     native
+
+Executable "test-standalone"
+  Install:            false
+  MainIs:             plugin_loader_standalone.ml
+  Path:               test
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  CompiledObject:     native
