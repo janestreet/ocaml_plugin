@@ -45,14 +45,12 @@ module Config : sig
     dir:string
     -> ?max_files:int (* default is 10 *)
     -> ?readonly:bool (* default is false *)
-    -> ?try_old_cache_with_new_exec:bool (* default is false *)
     -> unit
     -> t
 
   val dir : t -> string
   val max_files : t -> int
   val readonly : t -> bool
-  val try_old_cache_with_new_exec : t -> bool
 end
 
 (**

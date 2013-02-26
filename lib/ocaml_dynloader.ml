@@ -49,24 +49,18 @@ module Compilation_config = struct
       hostname : string;
       pid : Pid.t;
       sys_argv : string array;
-      version : string;
-      build_info : string;
     } with sexp_of
 
     let create () =
       Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         let hostname = Unix.gethostname () in
         let pid = Unix.getpid () in
-        let build_info = Version_util.build_info in
-        let version = Version_util.version in
         let sys_argv = Sys.argv in
         Unix.getlogin () >>| fun login ->
         let t = {
           login;
           hostname;
           pid;
-          build_info;
-          version;
           sys_argv;
         } in
         sexp_of_t t

@@ -1,16 +1,6 @@
 open Core.Std
 open Async.Std
 
-module Build_info : sig
-  type t with sexp
-  val equal : t -> t -> bool
-  val current : t
-end = struct
-  type t = Sexp.t with sexp
-  let current = Version_util.build_info_as_sexp
-  let equal = Sexp.equal
-end
-
 type filename = string with sexp, compare
 
 let parallel list ~f =
@@ -69,7 +59,6 @@ module Info : sig
     -> t
 
   val plugins : t -> Plugin.t list
-  val build_info : t -> Build_info.t
 
   val empty : t
 
@@ -81,19 +70,13 @@ module Info : sig
 end = struct
 
   type t = {
-    version: Sexp.t;
-    build_info : Build_info.t;
     plugins : Plugin.t list;
   } with sexp, fields
 
   let create
       ~plugins
       () =
-    let version = sexp_of_string Version_util.version in
-    let build_info = Build_info.current in
     {
-      version;
-      build_info;
       plugins;
     }
 
@@ -140,14 +123,12 @@ module Config = struct
       dir: string;
       max_files: int with default(10);
       readonly: bool with default(false);
-      try_old_cache_with_new_exec : bool with default(false);
     } with fields, sexp
     let of_prev v1 =
       {
         dir = v1.V1.dir;
         max_files = Option.value v1.V1.max_files ~default:10;
         readonly = v1.V1.readonly;
-        try_old_cache_with_new_exec = false;
       }
   end
   module V = struct
@@ -175,13 +156,11 @@ module Config = struct
       ~dir
       ?(max_files=10)
       ?(readonly=false)
-      ?(try_old_cache_with_new_exec=false)
       () =
     {
       dir;
       max_files;
       readonly;
-      try_old_cache_with_new_exec;
     }
 
 end
@@ -223,30 +202,22 @@ module State = struct
          proceed as if there was no cache *)
       refresh_behavior Info.empty
     | Ok info ->
-      if Build_info.equal Build_info.current (Info.build_info info)
-        || (
-          if Config.try_old_cache_with_new_exec t.config
-          then (t.old_cache_with_new_exec <- true ; true)
-          else false
-        )
-      then
-        (* filtering the plugin if the file is available *)
-        let iter plugin =
-          Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
-          | Ok () ->
-            let index = t.index in
-            t.index <- succ index;
-            let sources = Plugin.sources plugin in
-            let key = Sources.key sources in
-            Key.Table.replace t.table ~key ~data:(index, plugin);
-            Deferred.return ()
-          | Error _ ->
-            Deferred.return ()
-        in
-        Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
-        Ok ()
-      else
-        refresh_behavior info
+      t.old_cache_with_new_exec <- true;
+      (* filtering the plugin if the file is available *)
+      let iter plugin =
+        Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
+        | Ok () ->
+          let index = t.index in
+          t.index <- succ index;
+          let sources = Plugin.sources plugin in
+          let key = Sources.key sources in
+          Key.Table.replace t.table ~key ~data:(index, plugin);
+          Deferred.return ()
+        | Error _ ->
+          Deferred.return ()
+      in
+      Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
+      Ok ()
 
   let create config =
     let table = Key.Table.create () in
