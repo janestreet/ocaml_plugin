@@ -1,3 +1,4 @@
+This toy application is meant to demo various uses of the plugin library.
 Here is a small list of what to test with the run executable:
 In any case, you might want to use -shell-verbose or -shell-echo
 to have a better idea of what is happening.
@@ -17,33 +18,36 @@ and need -I option to find its needed cmi files
 
 ./run.exe -n -v1 config/config_01.ml
   try to load without adding the -I flags to the cmi
-  this fail with an Unbound module
+  this fail with an Unbound module Ocaml_plugin
 
 ./run.exe -n -I . -I ../lib -v1 config/config_01.ml
-  work well
+  works well
 
 ./run.exe -n -I . -I ../lib -v2 config/config_02.ml
   should not work because config_v2 uses some utility functions
   defined in config/config_util.ml
-  fail with undefined symbols
+  this fail with an Unbound module Config_util
 
-./run.exe -n -I . -I ../lib -f config/config_util.ml -v2 config/config_02.ml
-  work well
+./run.exe -n -I . -I ../lib -v2 'config/config_util.ml config/config_02.ml'
+  works well
 
 You can use -tmp as well as -clean if you are not interested in seeing
 the copied files and the compilation directory.
 
-STANDALONE MODE
----------------
+EMBEDDED MODE (STANDALONE EXECUTABLES)
+--------------------------------------
 
 This mode is more tricky, it uses an ocamlopt embedded in the executable
 as well as cmi files so that the resulting executable do not need
-any of them.
+any of them. The embedded files are batches together in tgz file that gets
+appended after the binary code. The new binary is called -standalone by convention.
 
-For that purpose, you need to enrich the executable run.exe using
-the tool provided in the bin/ directory:
+There is a util provided in the bin/ directory to create standalone executables:
 
-../bin/ocaml_embed_compiler.exe -exe run.exe -cc $(which ocamlopt) dsl.cmi ../lib/ocaml_plugin.cmi -o run-standalone.exe
+../bin/ocaml_embed_compiler.exe -exe ./run.exe -cc $(which ocamlopt) dsl.cmi ../lib/ocaml_plugin.cmi $(ocamlopt -where)/pervasives.cmi -o ./run-standalone.exe
+
+you can extract back the archive embedded in the executable using:
+../bin/ocaml_embed_compiler.exe -x ./run-standalone.exe
 
 Then, you can try:
 
@@ -63,11 +67,11 @@ You can try also to forget an cmi file and see what happen
 BUILD RULES
 -----------
 
-Now, we have a dedicated build rule to build standalone executable.
-Cf OMakefile: OCamlMakeStandaloneExecutables
+Depending on your build-system, you probably want to add a special rule to build
+the standalone version of the executable (calling ocaml_embed_compiler).
+At JS we have a special rule in OMakeroot where the set of cmi files to embed is
+configurable via a variable.
+In the release, there is a rule to include a bunch of cmi by default.
 
 -------------
 You can also try with some more config files.
-
-Cheers,
-Mathieu Barbin

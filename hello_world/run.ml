@@ -1,4 +1,12 @@
 (* simplest example for using ocaml_plugin *)
+(*
+  This is an interactive loop. It is meant to be used for small demo, testing the cache,
+  looking at the build dir while the application is still runngin, experimenting various
+  failure scenarios, etc.
+  run with:
+  rlwrap ./run-standalone.exe
+  enter ml filename(s) to load: plugin_001.ml
+*)
 
 open Core.Std
 open Async.Std

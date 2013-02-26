@@ -127,6 +127,7 @@ let raw_temp_dir ~in_dir =
       "ocaml_plugin_"
       ".build"
   in
+  mkdir_p ~perm:permission_exe in_dir >>=? fun () ->
   Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
 let absolute_pathname filename =

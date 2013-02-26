@@ -98,19 +98,23 @@ end
 
 module Flags =
 struct
+  let split_files string =
+    let files = String.split ~on:' ' string in
+    List.map files ~f:String.strip
+
   let add_file tag version =
-    let add file =
-      let file =
+    let add sources =
+      let sources =
         match version with
-        | `v1 -> `v1 file
-        | `v2 -> `v2 file
-        | `util -> `util file
+        | `v1 -> `v1 sources
+        | `v2 -> `v2 sources
+        | `util -> `util sources
       in
-      Queue.enqueue files file
+      Queue.enqueue files sources
     in
     Flag.string
       tag
-      ~doc:" add an ocaml config file to be loaded"
+      ~doc:" add one or several ocaml config files to be loaded (sep by ' ')"
       add
 
   let rev_append_flags rev_acc flags =
@@ -204,14 +208,14 @@ let handle_error load = function
     Printf.eprintf "Error:\n%s\n%!" (Error.to_string_hum e)
 
 let load_file loader = function
-  | `v1 file ->
-    let v1 = Config.V1.load_ocaml_src_files loader [file] in
+  | `v1 files ->
+    let v1 = Config.V1.load_ocaml_src_files loader (Flags.split_files files) in
     v1 >>| (handle_error Dsl.register_v1)
-  | `v2 file ->
-    let v2 = Config.V2.load_ocaml_src_files loader [file] in
+  | `v2 files ->
+    let v2 = Config.V2.load_ocaml_src_files loader (Flags.split_files files) in
     v2 >>| (handle_error Dsl.register_v2)
-  | `util file ->
-    let res = Ocaml_dynloader.load_ocaml_src_files loader [file] in
+  | `util files ->
+    let res = Ocaml_dynloader.load_ocaml_src_files loader (Flags.split_files files) in
     res >>| (handle_error ignore)
 
 let load_default loader =
