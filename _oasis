@@ -51,18 +51,32 @@ Executable "ocaml-embed-compiler"
   MainIs:             ocaml_embed_compiler.ml
   Path:               bin
   BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     best
+  CompiledObject:     native
 
 Executable "hello-world"
   Install:            false
   MainIs:             run.ml
   Path:               hello_world
   BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     best
+  CompiledObject:     native
+
+Executable "hello-world-standalone"
+  Install:            false
+  MainIs:             run_standalone.ml
+  Path:               hello_world
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  CompiledObject:     native
 
 Executable "sample"
   Install:            false
   MainIs:             run.ml
   Path:               sample
   BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     best
+  CompiledObject:     native
+
+Executable "sample-standalone"
+  Install:            false
+  MainIs:             run_standalone.ml
+  Path:               sample
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  CompiledObject:     native
