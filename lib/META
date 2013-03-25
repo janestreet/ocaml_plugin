@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: 8c213730fa679ca8f873e17b780bb441)
+version = "109.15.00"
+description = "Automatically build and load OCaml source files"
+requires = "dynlink async comparelib bin_prot fieldslib threads"
+archive(byte) = "ocaml_plugin.cma"
+archive(byte, plugin) = "ocaml_plugin.cma"
+archive(native) = "ocaml_plugin.cmxa"
+archive(native, plugin) = "ocaml_plugin.cmxs"
+exists_if = "ocaml_plugin.cma"
+# OASIS_STOP
+
