@@ -32,8 +32,8 @@ let ml_with_mli_reorder filenames =
       path :: acc
     end
   in
-  let paths = List.fold_left filenames ~init:[] ~f:init_bundle in
-  List.rev_map paths ~f:(fun path -> (path, Hash_set.mem mli_set path))
+  let rev_paths = List.fold_left filenames ~init:[] ~f:init_bundle in
+  List.rev_map rev_paths ~f:(fun path -> (path, Hash_set.mem mli_set path))
 
 let from_filenames filenames =
   Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
@@ -41,11 +41,7 @@ let from_filenames filenames =
     Deferred.List.map pairs ~f:enrich_bundle
   )
 
-let to_ml file = `ml (file ^ ".ml")
-let to_mli file = `mli (file ^ ".mli")
-
 let to_pathnames (name, has_mli) =
-  if has_mli then
-    `pair (to_ml name, to_mli name)
-  else
-    to_ml name
+  let ml = name ^ ".ml" in
+  let mli = if has_mli then Some (name ^ ".mli") else None in
+  `ml ml, `mli mli

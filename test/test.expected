@@ -1,0 +1,38 @@
+Loading non existing mli
+failed the expected way
+
+Loading non existing ml
+failed the expected way
+
+Loading mli without ml
+loaded fine
+
+Loading ml without mli
+loaded fine
+
+Loading ml with mli by mentioning ml
+loaded fine
+
+Loading ml with mli by mentioning mli
+loaded fine
+
+Loading ml with mli by mentioning wrong mli
+failed fine
+
+loading the same ml file several times
+really loaded several times
+
+loading the same ml file several times with a cache
+really loaded several times, and compiled once
+
+Checking that it really is using the cache
+perfect
+
+Loading ml that blows up at toplevel
+failed fine
+
+loading several ml files
+loaded in the right order and with the right scope
+
+Checking that there is no leak of tmp dirs
+

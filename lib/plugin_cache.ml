@@ -1,6 +1,16 @@
 open Core.Std
 open Async.Std
 
+module Build_info : sig
+  type t with sexp
+  val equal : t -> t -> bool
+  val current : t
+end = struct
+  type t = Sexp.t with sexp
+  let current = Params.build_info_as_sexp
+  let equal = Sexp.equal
+end
+
 type filename = string with sexp, compare
 
 let parallel list ~f =
@@ -9,10 +19,8 @@ let parallel list ~f =
 module Digest : sig
   type t with compare, sexp
   val file : filename -> t Deferred.Or_error.t
-  val to_string : t -> string
 end = struct
   type t = string with compare, sexp
-  let to_string t = t
 
   let file filename =
     let fct () =
@@ -35,7 +43,6 @@ module Sources = struct
   type elt = filename * Digest.t with sexp, compare
   type t = elt list with sexp, compare
   let (=) a b = compare_t a b = 0
-  let files t = t
   let key t = List.map ~f:fst t
 end
 
@@ -59,9 +66,12 @@ module Info : sig
     -> t
 
   val plugins : t -> Plugin.t list
+  val build_info : t -> Build_info.t
 
   val empty : t
+  val is_empty : t -> bool
 
+  val info_file_pathname : dir:string -> string
   val load : dir:string -> t Deferred.Or_error.t
   val save : dir:string -> t -> unit Deferred.Or_error.t
 
@@ -70,19 +80,26 @@ module Info : sig
 end = struct
 
   type t = {
+    version: Sexp.t;
+    build_info : Build_info.t;
     plugins : Plugin.t list;
   } with sexp, fields
 
   let create
       ~plugins
       () =
+    let version = sexp_of_string Params.version in
+    let build_info = Build_info.current in
     {
+      version;
+      build_info;
       plugins;
     }
 
   let empty = create
     ~plugins:[]
     ()
+  let is_empty t = List.is_empty t.plugins
 
   let cache_dir = "cmxs-cache"
   let info_file = "cache-info.sexp"
@@ -90,15 +107,15 @@ end = struct
   let cache_dir_perm = 0o755
   let cache_files_perm = 0o644
 
-  let info_file_pathname dir = dir ^/ cache_dir ^/ info_file
+  let info_file_pathname ~dir = dir ^/ cache_dir ^/ info_file
 
   let save ~dir t =
     Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-      Writer.save_sexp ~perm:cache_files_perm (info_file_pathname dir) (sexp_of_t t)
+      Writer.save_sexp ~perm:cache_files_perm (info_file_pathname ~dir) (sexp_of_t t)
     )
 
   let load ~dir =
-    let pathname = info_file_pathname dir in
+    let pathname = info_file_pathname ~dir in
     (* do no check for `Read there, let the reader fail in that case *)
     Unix.access pathname [ `Exists ] >>= function
     | Ok () -> begin
@@ -111,6 +128,8 @@ end = struct
 end
 
 module Config = struct
+  let try_old_cache_with_new_exec_default = not Params.build_info_available
+
   module V1 = struct
     type t = {
       dir: string;
@@ -123,12 +142,14 @@ module Config = struct
       dir: string;
       max_files: int with default(10);
       readonly: bool with default(false);
+      try_old_cache_with_new_exec : bool with default(try_old_cache_with_new_exec_default);
     } with fields, sexp
     let of_prev v1 =
       {
         dir = v1.V1.dir;
         max_files = Option.value v1.V1.max_files ~default:10;
         readonly = v1.V1.readonly;
+        try_old_cache_with_new_exec = try_old_cache_with_new_exec_default;
       }
   end
   module V = struct
@@ -156,11 +177,13 @@ module Config = struct
       ~dir
       ?(max_files=10)
       ?(readonly=false)
+      ?(try_old_cache_with_new_exec=try_old_cache_with_new_exec_default)
       () =
     {
       dir;
       max_files;
       readonly;
+      try_old_cache_with_new_exec;
     }
 
 end
@@ -171,10 +194,18 @@ module State = struct
     config : Config.t;
     mutable index : int;
     mutable old_cache_with_new_exec : bool;
+    (* This field is true when the build info of the cache doesn't match and the config
+       allows this option. But if the cache has the right build info, then this field
+       stays false so that we don't try recompiling needlessly. *)
     mutable old_files_deleted : bool;
     table : (int * Plugin.t) Key.Table.t;
+    (* At any given time (except maybe on startup and when the cache is readonly), the
+       index in the table should be in [index - maxfiles, index[. [clean_old] is the one
+       removing the old cmxs' from the table and from the filesystem. *)
     deprecated_plugins : Plugin.t Queue.t;
   }
+
+  exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of string with sexp
 
   let del_cmxs path filename =
     if Filename.check_suffix filename "cmxs" then
@@ -184,7 +215,7 @@ module State = struct
 
   let load_info t =
     let config_dir = Config.dir t.config in
-    let refresh_behavior info =
+    let reset_cache_if_writable info =
       if Config.readonly t.config
       then
         Deferred.return (Ok ())
@@ -192,32 +223,52 @@ module State = struct
         Info.save ~dir:config_dir Info.empty >>=? fun () ->
         parallel ~f:Plugin.clean (Info.plugins info) >>=? fun () ->
         let cache_dir = config_dir ^/ Info.cache_dir in
-        Sys.readdir cache_dir >>= fun files ->
+        Shell.readdir cache_dir >>=? fun files ->
         Deferred.Or_error.List.iter (Array.to_list files) ~f:(del_cmxs cache_dir)
       end
     in
     Info.load ~dir:config_dir >>= function
     | Error _ ->
-      (* the info could not be read, we clean the possibly existing cmxs files and then
-         proceed as if there was no cache *)
-      refresh_behavior Info.empty
+      (* the info file exists but could not be read or could not be parsed *)
+      if Config.readonly t.config then
+        (* if the config is readonly, then we would rather make an error instead of
+           working as if there was no cache, because applications could become slow all
+           of a sudden, for reasons that could be hard to debug. *)
+        Deferred.Or_error.of_exn
+          (Read_only_info_file_exists_but_cannot_be_read_or_parsed
+             (Info.info_file_pathname ~dir:config_dir))
+      else
+        (* If it is a permissions error, recreating the info file will fail and we will
+           get a proper error. If it is a parsing error, we will just clean the possibly
+           existing cmxs files and then proceed as if there was no cache. *)
+        reset_cache_if_writable Info.empty
     | Ok info ->
-      t.old_cache_with_new_exec <- true;
-      (* filtering the plugin if the file is available *)
-      let iter plugin =
-        Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
-        | Ok () ->
-          let index = t.index in
-          t.index <- succ index;
-          let sources = Plugin.sources plugin in
-          let key = Sources.key sources in
-          Key.Table.replace t.table ~key ~data:(index, plugin);
-          Deferred.return ()
-        | Error _ ->
-          Deferred.return ()
-      in
-      Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
-      Ok ()
+      if (Params.build_info_available
+          && Build_info.equal Build_info.current (Info.build_info info))
+        || Info.is_empty info
+        || (
+          if Config.try_old_cache_with_new_exec t.config
+          then (t.old_cache_with_new_exec <- true ; true)
+          else false
+        )
+      then
+        (* filtering the plugin if the file is available *)
+        let iter plugin =
+          Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
+          | Ok () ->
+            let index = t.index in
+            t.index <- succ index;
+            let sources = Plugin.sources plugin in
+            let key = Sources.key sources in
+            Key.Table.replace t.table ~key ~data:(index, plugin);
+            Deferred.return ()
+          | Error _ ->
+            Deferred.return ()
+        in
+        Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
+        Ok ()
+      else
+        reset_cache_if_writable info
 
   let create config =
     let table = Key.Table.create () in
@@ -247,6 +298,7 @@ module State = struct
     Info.save ~dir:(Config.dir t.config) (info t)
 
   let clean_old t =
+    assert (not (Config.readonly t.config));
     let max_files = Config.max_files t.config in
     let cut = t.index - max_files in
     let to_clean = ref [] in
@@ -256,6 +308,7 @@ module State = struct
     in
     Key.Table.filter_inplace t.table ~f;
     Queue.iter ~f:clean t.deprecated_plugins;
+    Queue.clear t.deprecated_plugins;
     parallel !to_clean ~f:Plugin.clean >>=? fun () ->
     (* clean other old cmxs files that are no longer referenced by the info
        needs to be done only once *)
@@ -268,7 +321,7 @@ module State = struct
         String.Hash_set.of_list basenames
       in
       let cache_dir = Config.dir t.config ^/ Info.cache_dir in
-      Sys.readdir cache_dir >>= fun files ->
+      Shell.readdir cache_dir >>=? fun files ->
       Deferred.Or_error.List.iter (Array.to_list files) ~f:(fun file ->
         if not (Hash_set.mem current_cmxs_basename file)
         then
@@ -290,11 +343,11 @@ module State = struct
       then
         Some plugin
       else (
-        (*
-          this cache is now invalid, we should remove the file
-          but this is very likely that a 'add' will be called,
-          and we prefer writing the info file only once
-        *)
+        (* This cache is now invalid, we should remove the file but this is very likely
+           that a 'add' will be called, and we prefer writing the info file only once.
+           We can't add the same plugin several times in the queue because it is removed
+           from the hashtbl. If the config is read only, the file will stay in the
+           queue. *)
         if not (Config.readonly t.config) then (
           Queue.enqueue t.deprecated_plugins plugin;
         );
@@ -332,9 +385,9 @@ end
 include State
 
 let filenames_from_ml_bundles lst =
-  let f x = match Ml_bundle.to_pathnames x with
-    | `ml ml -> [ ml ]
-    | `pair (`ml ml, `mli mli) -> [ml ; mli]
+  let f x =
+    let `ml ml, `mli opt_mli = Ml_bundle.to_pathnames x in
+    ml :: Option.to_list opt_mli
   in List.concat_map lst ~f
 
 let digest files =

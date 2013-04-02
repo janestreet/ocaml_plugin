@@ -1,4 +1,6 @@
-(* uniq identifier for plugin *)
+(* [t] is a uniq identifier for plugin, along with some information needed for code
+   generation and that make debugging nicer because they end up in the cache info.
+*)
 
 open Core.Std
 
@@ -28,7 +30,7 @@ val repr : t -> Repr.t option
 
 (*
   via Sexp.of_string,
-  so that the generated plugin doesn't necessary depends on sexplib.cmi
+  so that the generated plugin doesn't needlessly depends on sexplib.cmi
 *)
 val t_of_string : string -> t
 val string_of_t : t -> string

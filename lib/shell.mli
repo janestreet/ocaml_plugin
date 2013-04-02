@@ -56,3 +56,4 @@ val absolute_pathnames : string list -> string list Deferred.Or_error.t
 val rm : ?r:unit -> ?f:unit -> string list -> unit Deferred.Or_error.t
 val rmdir : string -> unit Deferred.Or_error.t
 val cp : source:string -> dest:string -> unit Deferred.Or_error.t
+val readdir : string -> string array Deferred.Or_error.t

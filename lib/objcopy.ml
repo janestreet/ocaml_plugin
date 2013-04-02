@@ -23,11 +23,9 @@ let retrieve_cmd ~filename ~section_id ~destination =
   ]
 
 let embed ~filename ~section_id ~section ~destination =
-  match embed_cmd ~filename ~section_id ~section ~destination with
-  | cmd, args ->
-    Shell.run cmd args
+  let cmd, args = embed_cmd ~filename ~section_id ~section ~destination in
+  Shell.run cmd args
 
 let retrieve ~filename ~section_id ~destination =
-  match retrieve_cmd ~filename ~section_id ~destination with
-  | cmd, args ->
-    Shell.run cmd args
+  let cmd, args = retrieve_cmd ~filename ~section_id ~destination in
+  Shell.run cmd args

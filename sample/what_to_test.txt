@@ -67,7 +67,7 @@ You can try also to forget an cmi file and see what happen
 BUILD RULES
 -----------
 
-Depending on your build-system, you probably want to add a special rule to build
+Depending on your build-system, you probably want to add a special rul to build
 the standalone version of the executable (calling ocaml_embed_compiler).
 At JS we have a special rule in OMakeroot where the set of cmi files to embed is
 configurable via a variable.

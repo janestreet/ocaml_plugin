@@ -1,11 +1,11 @@
 let extract ~working_dir tar =
   let args = [
-    "--directory"; working_dir;
     "-vxzf"; tar;
   ] in
   Shell.run_lines ~working_dir "tar" args
 
 let list tar =
+  (* curiously, tar doesn't need a z option *)
   let args = [ "-tf" ; tar ] in
   Shell.run_lines "tar" args
 

@@ -19,16 +19,17 @@ type t = {
   cmxs_flags : string list;
   compilation_config : (string * Config.t option) Or_error.t Lazy_deferred.t;
   include_directories : string list;
-  loaded : String.Hash_set.t;
   ocamlopt_opt : string;
   camlp4o_opt : string;
-  pa_files : string list;
+  pa_files : string list; (* Usually contains explicit provided preprocessors. The ones
+                             from the config will be added right before generating the
+                             command lines *)
   cache : Plugin_cache.t Or_error.t Lazy_deferred.t option;
 } with fields
 
 let next_filename () =
   let s = Printf.sprintf "m_dyn_%d_.ml" !index in
-  index := succ !index;
+  incr index;
   s
 
 let ocamlopt_opt = "ocamlopt.opt"
@@ -49,18 +50,24 @@ module Compilation_config = struct
       hostname : string;
       pid : Pid.t;
       sys_argv : string array;
+      version : string;
+      build_info : string;
     } with sexp_of
 
     let create () =
       Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         let hostname = Unix.gethostname () in
         let pid = Unix.getpid () in
+        let build_info = Params.build_info in
+        let version = Params.version in
         let sys_argv = Sys.argv in
         Unix.getlogin () >>| fun login ->
         let t = {
           login;
           hostname;
           pid;
+          build_info;
+          version;
           sys_argv;
         } in
         sexp_of_t t
@@ -80,7 +87,7 @@ module Compilation_config = struct
       Shell.temp_dir ~in_dir >>=? fun directory ->
       (match initialize_compilation_callback with
       | None -> return (Ok None)
-      | Some task -> task directory) >>=? fun config_opt ->
+      | Some task -> task ~directory) >>=? fun config_opt ->
       let info_file = info_file directory in
       Info.save info_file >>=? fun () ->
       return (Ok (directory, config_opt))
@@ -126,7 +133,6 @@ let create
   in
   if not Dynlink.is_native then Deferred.Or_error.of_exn Is_not_native else
   Shell.absolute_pathnames include_directories >>=? fun include_directories ->
-  let loaded = String.Hash_set.create () in
   let cache = Option.map use_cache ~f:(fun cache_config ->
     Lazy_deferred.create (fun () -> Plugin_cache.create cache_config))
   in
@@ -141,7 +147,6 @@ let create
       cmxs_flags;
       compilation_config;
       include_directories;
-      loaded;
       ocamlopt_opt;
       camlp4o_opt;
       pa_files;
@@ -153,24 +158,9 @@ let clean t =
   if not (Lazy_deferred.is_forced t.compilation_config) then return (Ok ())
   else begin
     Lazy_deferred.force_exn t.compilation_config >>=? fun (directory, _) ->
-    let ext = [ "ml" ; "o" ; "cmx" ; "cmxs" ; "cmi" ] in
-    let files =
-      let fct file ext =
-        let filename = Printf.sprintf "%s.%s" file ext in
-        let filename = Filename.concat directory filename in
-        filename
-      in
-      Hash_set.fold
-        ~init:[]
-        ~f:(fun acc file -> List.rev_map_append ext acc ~f:(fct file))
-        t.loaded
-    in
-    let info_file = Compilation_config.info_file directory in
-    Shell.rm ~f:() (info_file :: files) >>=? fun () ->
-    (* try to clean the directory at the end if it is not empty *)
-    Shell.rmdir directory >>| fun result ->
+    Shell.rm ~r:() ~f:() [directory] >>| fun result ->
     t.cleaned <- true;
-    Ok (ignore (result : unit Or_error.t))
+    result
   end
 
 module type Module_type =
@@ -188,10 +178,14 @@ module Compile : sig
 
   val copy_files : working_dir:string -> Plugin_uuid.t -> string Deferred.Or_error.t
 
-  val dynlink : ?export:bool -> string -> unit Deferred.Or_error.t
+  val dynlink :
+    ?export:bool
+    -> plugin_uuid:Plugin_uuid.t
+    -> string -> unit Deferred.Or_error.t
 
   val compile_and_load_file :
     working_dir:string
+    -> plugin_uuid:Plugin_uuid.t
     -> t
     -> ?export:bool
     -> basename:Core.Std.String.Hash_set.elt
@@ -203,14 +197,12 @@ end = struct
     let content = In_channel.input_all in_channel in
     Out_channel.output_string out_channel content
 
-  let add_position_directive out_channel filename =
-    Out_channel.output_string out_channel (Printf.sprintf "#1 %S\n" filename)
-
   let permission = 0o600
 
   let copy_files ~working_dir plugin_uuid =
     let fct () =
-      let with_bundle ~typed ~plugin_uuid out_channel bundle =
+      let repr_opt = Plugin_uuid.repr plugin_uuid in
+      let with_bundle ~last_module out_channel bundle =
         let module_name, filename, intf_filename_opt =
           let get_module_name path =
             let basename = Filename.basename path in
@@ -218,28 +210,39 @@ end = struct
             fail because [Ml_bundle.to_pathnames] always returns absolute paths with
             extensions. *)
             in String.capitalize name
-          in match Ml_bundle.to_pathnames bundle with
-          | `pair (`ml ml_path, `mli mli_path) ->
-             get_module_name ml_path, ml_path, Some mli_path
-          | `ml ml_path -> get_module_name ml_path, ml_path, None
+          in
+          let `ml ml_path, `mli mli_path = Ml_bundle.to_pathnames bundle in
+          get_module_name ml_path, ml_path, mli_path
         in
-        Out_channel.output_string out_channel (
-          Plugin_table.Generation_helper.header_code
-            ~typed ~plugin_uuid ~module_name ~has_mli:(Option.is_some intf_filename_opt)
-        );
+        Printf.fprintf out_channel "module %s " module_name;
         begin match intf_filename_opt with
-        | None -> () (* do nothing *)
+        | None ->
+          begin match repr_opt with
+          | Some repr when last_module ->
+            Printf.fprintf out_channel ": %s = struct\n" (Plugin_uuid.Repr.t repr)
+          | _ ->
+            Printf.fprintf out_channel "= struct\n"
+          end
         | Some intf_filename ->
-          add_position_directive out_channel intf_filename;
+          Printf.fprintf out_channel " : sig\n";
+          Printf.fprintf out_channel "#1 %S\n" intf_filename;
           In_channel.with_file ~binary:false intf_filename
             ~f:(output_in_channel out_channel);
-          Out_channel.output_string out_channel
-            Plugin_table.Generation_helper.sig_struct_separation
-        end ;
-        add_position_directive out_channel filename;
+          Printf.fprintf out_channel "\nend = struct\n";
+        end;
+        Printf.fprintf out_channel "#1 %S\n" filename;
         In_channel.with_file ~binary:false filename ~f:(output_in_channel out_channel);
-        Out_channel.output_string out_channel
-          (Plugin_table.Generation_helper.trailer_code ~typed ~plugin_uuid ~module_name);
+        Printf.fprintf out_channel "\nend\n";
+        if last_module then begin
+          match repr_opt with
+          | None -> ()
+          | Some repr ->
+            Printf.fprintf out_channel (
+              "let () =\n" ^^
+              "  let module P = Ocaml_plugin.Plugin_table in\n" ^^
+              "  P.register ~plugin_uuid %s (module %s : %s)\n"
+            ) (Plugin_uuid.Repr.univ_constr repr) module_name (Plugin_uuid.Repr.t repr)
+        end
       in
       let target = next_filename () in
       let full_target = working_dir ^/ target in
@@ -250,33 +253,46 @@ end = struct
             | [] -> raise No_file_to_compile
             | last :: utils -> List.rev utils, last
           in
-          Out_channel.output_string out_channel
-            (Plugin_table.Generation_helper.let_plugin_uuid ~plugin_uuid);
-          List.iter utils ~f:(with_bundle ~typed:false ~plugin_uuid out_channel);
-          with_bundle ~typed:true ~plugin_uuid out_channel last
+          Printf.fprintf out_channel
+            "let plugin_uuid = Ocaml_plugin.Plugin_uuid.t_of_string %S\n"
+            (Plugin_uuid.string_of_t plugin_uuid);
+          List.iter utils ~f:(with_bundle ~last_module:false out_channel);
+          with_bundle ~last_module:true out_channel last;
+
         );
       target
     in
     Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
-  let blocking_dynlink ?(export=false) file =
+
+  (* Dynlink has the following not really wanted property: dynlinking a file with a given
+     filename only works properly the first time. Further dynlinks with the same filename
+     (even a different file) will not load the new module but instead execute the initial
+     module. Since ocaml_plugin need to be able to load cmxs coming from ml files with the
+     same name (several variations of config.ml for instance), what we do is give unique
+     name to each cmxs that we produce: files in the cache have their uuid in the name,
+     and files not in the cache are called $tmp_dir/something_$fresh.cmxs.
+     We can't have several Ocaml_dynloader.t use the same directory, because ocaml_plugin
+     always create a fresh directory in which to put its files. *)
+  let blocking_dynlink ?(export=false) ~plugin_uuid file =
     let loadfile = if export then Dynlink.loadfile else Dynlink.loadfile_private in
     try
       loadfile file
     with
-    | Dynlink.Error e -> raise (Dynlink_error (Dynlink.error_message e))
+    | Dynlink.Error e ->
+      Plugin_table.remove ~plugin_uuid;
+      raise (Dynlink_error (Dynlink.error_message e))
 
-  let dynlink ?export cmxs_filename =
-    let fct () = blocking_dynlink ?export cmxs_filename in
+  let dynlink ?export ~plugin_uuid cmxs_filename =
+    let fct () = blocking_dynlink ?export ~plugin_uuid cmxs_filename in
     Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
-  let compile_and_load_file ~working_dir t ?export ~basename =
-    let chop_extension =
+  let compile_and_load_file ~working_dir ~plugin_uuid t ?export ~basename =
+    let basename_without_ext =
       try Filename.chop_extension basename
       with Invalid_argument _ -> basename
     in
-    Hash_set.add t.loaded chop_extension;
-    let ext  = Printf.sprintf "%s.%s" chop_extension in
+    let ext  = Printf.sprintf "%s.%s" basename_without_ext in
     let ml   = ext "ml" in
     let cmx  = ext "cmx" in
     let cmxs = ext "cmxs" in
@@ -286,7 +302,8 @@ end = struct
     in
     let pp_args = match t.pa_files with
       | [] -> []
-      | cmxs -> [ "-pp" ; String.concat (t.camlp4o_opt::cmxs) ~sep:" " ]
+      | cmxs ->
+        [ "-pp" ; String.concat (t.camlp4o_opt::cmxs) ~sep:" " ]
     in
     let create_cmx_args =
       pp_args @ include_directories @ t.cmx_flags @ [
@@ -306,7 +323,7 @@ end = struct
     Shell.run ~quiet_or_error:true ~working_dir t.ocamlopt_opt create_cmxs_args
     >>=? fun () ->
     let cmxs = working_dir ^/ cmxs in
-    dynlink ?export cmxs >>|? fun () ->
+    dynlink ?export ~plugin_uuid cmxs >>|? fun () ->
     cmxs
 end
 
@@ -319,7 +336,7 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     let t = update_with_config t config_opt in
     let plugin_uuid = Plugin_uuid.create ~repr ~ml_bundles () in
     Compile.copy_files ~working_dir plugin_uuid >>=? fun basename ->
-    Compile.compile_and_load_file ~working_dir t ~export:false ~basename
+    Compile.compile_and_load_file ~working_dir ~plugin_uuid t ~export:false ~basename
     >>|? fun cmxs_filename ->
     plugin_uuid, cmxs_filename
   in
@@ -338,18 +355,22 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     match Plugin_cache.find cache sources with
     | Some plugin -> begin
       let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
-      Compile.dynlink cmxs_filename >>= function
+      let plugin_uuid = Plugin_cache.Plugin.plugin_uuid plugin in
+      Compile.dynlink ~plugin_uuid cmxs_filename >>= function
       | Ok () ->
-        Deferred.Or_error.return (Plugin_cache.Plugin.plugin_uuid plugin)
+        Deferred.Or_error.return plugin_uuid
       | Error _ as error ->
         if Plugin_cache.old_cache_with_new_exec cache
         then
-          (* in that case, since the exec has changed since the last time it was used to
+          (* In that case, since the exec has changed since the last time it was used to
              build this cache, we might have a chance that dynlinking a freshly rebuilt
-             cmxs file would actually succeed *)
+             cmxs file would actually succeed.
+             In the case where the plugin dynlinked normally but raises an exception at
+             toplevel, we will go through this branch and recompile it a second time. It
+             is probably fine though. *)
           refresh_cache ()
         else
-          (* rebuilding the cmxs from scratch would lead to the exact same file since we
+          (* Rebuilding the cmxs from scratch would lead to the exact same file since we
              have the same exec that the one that was used to build the same
              sources. Thus, the result of the dynlink would the same anyway, something
              else should be wrong. *)
@@ -364,20 +385,19 @@ module Make (X:Module_type) =
 struct
   let load_ocaml_src_files t filenames =
     let repr = Plugin_uuid.Repr.create ~t:X.t_repr ~univ_constr:X.univ_constr_repr in
-    load_ocaml_src_files_plugin_uuid ~repr:(Some repr)
-      t filenames >>| fun result -> Or_error.bind result (fun plugin_uuid ->
-        match Plugin_table.find_and_remove ~plugin_uuid () with
-        | None -> Or_error.of_exn (Plugin_not_found plugin_uuid)
-        | Some black -> (
-        (*
-          There is an hidden invariant there:
-          if the OCaml compilation succeed, that means that the loaded module
-          has the type represented in X.repr, so the [Univ.match_] will succeed
-        *)
-        match Univ.match_ black X.univ_constr with
-        | Some t -> Ok t
-        | None ->
-          Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
+    load_ocaml_src_files_plugin_uuid ~repr:(Some repr) t filenames >>| fun result ->
+    Or_error.bind result (fun plugin_uuid ->
+      match Plugin_table.find_and_remove ~plugin_uuid () with
+      | None -> Or_error.of_exn (Plugin_not_found plugin_uuid)
+      | Some black -> (
+          (* There is an hidden invariant there: if the OCaml compilation succeed, that
+             means that the loaded module has the type represented in X.repr, so the
+             [Univ.match_] will succeed. Of course this is only true is the user gave
+             a valid Module_type in the first place. *)
+            match Univ.match_ black X.univ_constr with
+            | Some t -> Ok t
+            | None ->
+              Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
       ))
 end
 

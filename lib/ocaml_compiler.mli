@@ -30,14 +30,7 @@ val pervasives : string
 
 val config_file : string
 
-(**
-   This returns the complete path of the code file beeing executed by
-   the current pid, i.e. the file containing the current program's binary.
-   This returns a Deferred.t because the implementation may need to interact
-   with the file system.
-   Although the current implementation doesn't, we do not want to change
-   the interface if this interaction becomes mandatory at some point.
-*)
+(** This returns the full path to the executable of the current process. *)
 val get_my_code_file : unit -> string Deferred.t
 
 type 'a create_arguments =
@@ -46,7 +39,7 @@ type 'a create_arguments =
 
 (**
    This is a special utilisation of the Generic Loader.
-   This uses some assumptions, such as a file called ocamlopt.opt
+   It relies on a few assumptions, such as a file called ocamlopt.opt
    is present in the archive, as well as some cmi files,
    and uses a tmp compilation_directory.
    A call to this function will retrieve the embedded part of the code,
@@ -82,7 +75,7 @@ val loader : t -> Ocaml_dynloader.t
 (**
    This forces the initialization setup (tempdir, extraction)
 *)
-val force_val : t -> unit Deferred.Or_error.t
+val force : t -> unit Deferred.Or_error.t
 
 (**
    This allow you to know the list of the filename contained in the archive.

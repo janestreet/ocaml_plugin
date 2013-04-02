@@ -2,7 +2,7 @@ open Core.Std
 open Async.Std
 
 let section_id = "dynlink"
-let tar_id = section_id^".tgz"
+let tar_id = section_id ^ ".tgz"
 
 let ocamlopt_opt = Ocaml_dynloader.ocamlopt_opt
 let camlp4o_opt = Ocaml_dynloader.camlp4o_opt
@@ -48,15 +48,19 @@ let clean t =
   if not (Lazy_deferred.is_forced t.initialize) then Deferred.return (Ok ())
   else
     directory t >>=? fun working_dir ->
-    Shell.rm ~r:() ~f:()  [ working_dir ]
+    Shell.rm ~r:() ~f:() [ working_dir ]
 
-let force_val t = force_initialize t ignore
+let force t = force_initialize t ignore
 
 let get_code_location pid =
   let pid = Int.to_string (Pid.to_int pid) in
   let link = "/proc" ^/ pid ^/ "exe" in
   link
 
+(* This returns a Deferred.t because the implementation may need to interact
+   with the file system.
+   Although the current implementation doesn't, we do not want to change
+   the interface if this interaction becomes mandatory at some point. *)
 let get_my_code_file () =
   let pid = Unix.getpid () in
   Deferred.return (get_code_location pid)
@@ -96,7 +100,7 @@ let create
     ?use_cache
     () =
   let initialize = ref None in
-  let initialize_compilation_callback working_dir =
+  let initialize_compilation_callback ~directory:working_dir =
     let get_compilation_config working_dir =
       Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Reader.load_sexp_exn (working_dir ^/ config_file) Ocaml_dynloader.Config.t_of_sexp
@@ -148,11 +152,11 @@ let create
     let def = Ocaml_dynloader.compilation_config loader in
     Lazy_deferred.follow def (function
     | Error _ as error -> Deferred.return error
-    | Ok _ -> (
+    | Ok _ ->
       match !initialize with
-      | Some def -> def
       | None -> assert false
-    ))
+      | Some def -> def
+    )
   in
   let compiler = {
     loader;

@@ -1,0 +1,159 @@
+#!/bin/bash
+
+# redirecting stderr to stdout
+exec 2>&1
+
+# not awesome is the same test is running in parallel in an other repo
+# could go inside and use the debug info maybe?
+tmpdirs_before="$(echo tmp_dir/ocaml_plugin*)"
+
+trap 'rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml' EXIT INT QUIT
+rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml
+
+echo 'Loading non existing mli'
+output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+if grep -q 'No such file or directory' <<< "$output"; then
+    echo 'failed the expected way'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading non existing ml'
+output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+if grep -q 'No such file or directory' <<< "$output"; then
+    echo 'failed the expected way'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo > test.mli
+echo 'Loading mli without ml'
+output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+rm -f test.mli
+if grep -q 'No such file or directory' <<< "$output"; then
+    echo 'loaded fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading ml without mli'
+echo 'print_string "loaded\n"' > ./test.ml
+output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+if [ "$output" = $'loaded' ]; then
+    echo 'loaded fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading ml with mli by mentioning ml'
+echo > ./test.mli
+output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+if [ "$output" = $'loaded' ]; then
+    echo 'loaded fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading ml with mli by mentioning mli'
+echo > ./test.mli
+output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+if [ "$output" = $'loaded' ]; then
+    echo 'loaded fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading ml with mli by mentioning wrong mli'
+echo 'val a : int' > test.mli
+output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+if grep -q 'The field `a'\'' is required' <<< "$output"; then
+    echo 'failed fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+rm test.mli
+echo 'loading the same ml file several times'
+output="$(./plugin_loader-standalone.exe 'test.ml | test.ml | test.ml | test2.ml' 2>&1)"
+if [ "$(grep '^loaded$' <<< "$output")" = $'loaded\nloaded\nloaded' ]; then
+    echo 'really loaded several times'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading the same ml file several times with a cache'
+output="$(./plugin_loader-standalone.exe cache 'test.ml | test.ml' 2>&1; ./plugin_loader-standalone.exe cache 'test.ml | test.ml' 2>&1)"
+if [ "$(grep '^loaded$' <<< "$output")" = $'loaded\nloaded\nloaded\nloaded' ]; then
+    if [ "$(find cache -type f -name '*.cmxs' | wc -l)" = 1 ]; then
+        echo 'really loaded several times, and compiled once'
+    else
+        echo 'really loaded several times, but compiled several times too'
+    fi
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Checking that it really is using the cache'
+cmxs_before="$(find cache -type f -name '*.cmxs')"
+echo 'print_string "somethingelse"' > test2.ml
+output1="$(./plugin_loader-standalone.exe cache 'test2.ml' 2>&1)"
+cmxs_after="$(find cache -type f -name '*.cmxs')"
+new_cmxs="$(comm -23 <(sort -u <<< "$cmxs_after") <(sort -u <<< "$cmxs_before"))"
+output2="$(./plugin_loader-standalone.exe cache 'test.ml' 2>&1)"
+for i in $cmxs_before; do cp $new_cmxs $i; done
+output3="$(./plugin_loader-standalone.exe cache 'test.ml' 2>&1)"
+if [ "$output1""$output2""$output3" = "somethingelse""loaded""somethingelse" ]; then
+    echo "perfect"
+else
+    echo "broken test:"
+    echo "$output1"
+    echo "$output2"
+    echo "$output3"
+fi
+echo
+
+echo 'Loading ml that blows up at toplevel'
+echo 'let () = failwith "blowup"' > test.ml
+output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+if grep -q 'Failure blowup' <<< "$output"; then
+    echo 'failed fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading several ml files'
+echo 'let x = Test2.x ^ "-middle"' > test1.ml
+echo 'let x = "first"' > test2.ml
+echo 'let x = Test1.x ^ "-last";; print_endline x' > test3.ml
+output="$(./plugin_loader-standalone.exe test2.ml test1.ml test3.ml 2>&1)"
+if [ "$output" = 'first-middle-last' ]; then
+    echo 'loaded in the right order and with the right scope'
+else
+    echo "broken test: $output"
+fi
+echo
+
+
+
+
+# TODO
+# echo 'check what happens on ocaml version change'
+# echo 'check what happens on build info change'
+# have a test that loads a lot of files (in parallel, even)
+# and see if something leaks or blows up
+
+sleep 5
+echo 'Checking that there is no leak of tmp dirs'
+tmpdirs_after="$(echo tmp_dir/ocaml_plugin*)"
+diff <(sort <<< "$tmpdirs_after") <(sort <<< "$tmpdirs_before")
+echo

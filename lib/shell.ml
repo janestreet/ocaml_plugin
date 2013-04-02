@@ -84,6 +84,8 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
         | None -> "none (cwd)"
       in
       let error = Error.of_lazy (lazy (
+        (* not using an sexp_of_t because it makes the output unreadable by escaping
+           newlines *)
         let status =
           match status with
           | Some status -> Sexp.to_string
@@ -94,8 +96,8 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
           working_dir
           status
           cmd (String.concat ~sep:" " args)
-          (endline stdout)
-          (endline stderr)
+          stdout
+          (if stdout = "" then stderr else "\n"^stderr)
       ))
       in
       Error error
@@ -176,3 +178,8 @@ let rmdir dir =
 
 let cp ~source ~dest =
   run "/bin/cp" [ source ; dest ]
+
+let readdir dir =
+  Deferred.Or_error.try_with (fun () ->
+    Sys.readdir dir
+  )
