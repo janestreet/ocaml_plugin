@@ -34,5 +34,3 @@ failed fine
 loading several ml files
 loaded in the right order and with the right scope
 
-Checking that there is no leak of tmp dirs
-
