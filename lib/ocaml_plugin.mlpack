@@ -1,0 +1,14 @@
+# OASIS_START
+# DO NOT EDIT (digest: c8c19fd84e2e010b19e2ce04945f2ccf)
+Ml_bundle
+Objcopy
+Ocaml_compiler
+Ocaml_dynloader
+Params
+Plugin_cache
+Plugin_uuid
+Plugin_table
+Shell
+Std
+Tar
+# OASIS_STOP
