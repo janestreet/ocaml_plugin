@@ -4,7 +4,7 @@ module Repr = struct
   type t = {
     t : string;
     univ_constr: string;
-  } with sexp, bin_io, compare, fields
+  } with sexp, compare, fields
   let create ~t ~univ_constr = {
     t;
     univ_constr;
@@ -16,14 +16,14 @@ module T = struct
     uuid : Uuid.t;
     ml_bundles : Ml_bundle.t list;
     repr : Repr.t option
-  } with sexp, bin_io, compare, fields
+  } with sexp, compare, fields
 
   let hash t = Hashtbl.hash (Uuid.hash t.uuid, t.ml_bundles, t.repr)
 end
 include T
 
-include Comparable.Make_binable(T)
-include Hashable.Make_binable (T)
+include Comparable.Make(T)
+include Hashable.Make (T)
 
 let create ~repr ~ml_bundles () =
   {

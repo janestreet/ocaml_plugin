@@ -15,9 +15,9 @@ type t
 
 val uuid : t -> Uuid.t
 
-include Sexpable             with type t := t
-include Comparable.S_binable with type t := t
-include Hashable.S_binable   with type t := t
+include Sexpable with type t := t
+include Comparable.S with type t := t
+include Hashable.S with type t := t
 
 val create :
   repr:Repr.t option

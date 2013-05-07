@@ -386,7 +386,7 @@ include State
 
 let filenames_from_ml_bundles lst =
   let f x =
-    let `ml ml, `mli opt_mli = Ml_bundle.to_pathnames x in
+    let `ml ml, `mli opt_mli, `module_name _ = Ml_bundle.to_pathnames x in
     ml :: Option.to_list opt_mli
   in List.concat_map lst ~f
 

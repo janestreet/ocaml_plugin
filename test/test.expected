@@ -13,6 +13,9 @@ loaded fine
 Loading ml with mli by mentioning ml
 loaded fine
 
+Loading ml with mli by mentioning ml without extension
+loaded fine
+
 Loading ml with mli by mentioning mli
 loaded fine
 
@@ -33,4 +36,19 @@ failed fine
 
 loading several ml files
 loaded in the right order and with the right scope
+
+loading file with a wrong name
+wrong module names are rejected
+
+loading names that collide
+detected
+
+loading mli that collide
+detected
+
+loading ml and mli with different basenames but same module name
+type error as expected
+
+loading ml and mli from different dirs
+type error as expected
 

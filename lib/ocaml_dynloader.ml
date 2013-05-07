@@ -85,12 +85,21 @@ module Compilation_config = struct
   let lazy_create ~initialize_compilation_callback ~in_dir =
     let compute () =
       Shell.temp_dir ~in_dir >>=? fun directory ->
-      (match initialize_compilation_callback with
-      | None -> return (Ok None)
-      | Some task -> task ~directory) >>=? fun config_opt ->
-      let info_file = info_file directory in
-      Info.save info_file >>=? fun () ->
-      return (Ok (directory, config_opt))
+      begin
+        (match initialize_compilation_callback with
+        | None -> return (Ok None)
+        | Some task -> task ~directory) >>=? fun config_opt ->
+        let info_file = info_file directory in
+        Info.save info_file >>=? fun () ->
+        return (Ok (directory, config_opt))
+      end >>= function
+      | Ok _ as ok -> return ok
+      | Error e ->
+        (* if something failed, the rest of the code of ocaml dynloader will never know
+           about the directory so we should delete it since no one else can. *)
+        Shell.rm ~r:() ~f:() [directory] >>| function
+        | Ok () -> Error e
+        | Error e2 -> Error (Error.of_list [e; e2])
     in
     Lazy_deferred.create compute
 end
@@ -157,10 +166,17 @@ let create
 let clean t =
   if not (Lazy_deferred.is_forced t.compilation_config) then return (Ok ())
   else begin
-    Lazy_deferred.force_exn t.compilation_config >>=? fun (directory, _) ->
-    Shell.rm ~r:() ~f:() [directory] >>| fun result ->
-    t.cleaned <- true;
-    result
+    Lazy_deferred.force_exn t.compilation_config >>= function
+    | Error _ ->
+      (* if t.compilation_config failed, then either we couldn't create the temporary
+         directory, in which case there is nothing to clean, or we failed after in
+         which case the temporary directory was cleaned there. Either way, things are
+         fine. *)
+      return (Ok ())
+    | Ok (directory, _) ->
+      Shell.rm ~r:() ~f:() [directory] >>| fun result ->
+      t.cleaned <- true;
+      result
   end
 
 module type Module_type =
@@ -203,16 +219,8 @@ end = struct
     let fct () =
       let repr_opt = Plugin_uuid.repr plugin_uuid in
       let with_bundle ~last_module out_channel bundle =
-        let module_name, filename, intf_filename_opt =
-          let get_module_name path =
-            let basename = Filename.basename path in
-            let name = Filename.chop_extension basename (* we are assured that this won't
-            fail because [Ml_bundle.to_pathnames] always returns absolute paths with
-            extensions. *)
-            in String.capitalize name
-          in
-          let `ml ml_path, `mli mli_path = Ml_bundle.to_pathnames bundle in
-          get_module_name ml_path, ml_path, mli_path
+        let `ml filename, `mli intf_filename_opt, `module_name module_name =
+          Ml_bundle.to_pathnames bundle
         in
         Printf.fprintf out_channel "module %s " module_name;
         begin match intf_filename_opt with

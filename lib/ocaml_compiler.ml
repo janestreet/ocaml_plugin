@@ -45,10 +45,9 @@ let read_directory t =
   Lazy_deferred.wait_exn t.initialize >>|? Directory.working_dir
 
 let clean t =
-  if not (Lazy_deferred.is_forced t.initialize) then Deferred.return (Ok ())
-  else
-    directory t >>=? fun working_dir ->
-    Shell.rm ~r:() ~f:() [ working_dir ]
+  (* Since we put the archive in the dynloader's tmp dir, we don't have to clean anything
+     ourselves. *)
+  Ocaml_dynloader.clean t.loader
 
 let force t = force_initialize t ignore
 

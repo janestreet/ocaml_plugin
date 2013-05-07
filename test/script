@@ -7,8 +7,8 @@ exec 2>&1
 # could go inside and use the debug info maybe?
 tmpdirs_before="$(echo tmp_dir/ocaml_plugin*)"
 
-trap 'rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml' EXIT INT QUIT
-rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml
+trap 'rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml Test.mli' EXIT INT QUIT
+rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml Test.mli
 
 echo 'Loading non existing mli'
 output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
@@ -52,6 +52,16 @@ echo
 echo 'Loading ml with mli by mentioning ml'
 echo > ./test.mli
 output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+if [ "$output" = $'loaded' ]; then
+    echo 'loaded fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'Loading ml with mli by mentioning ml without extension'
+echo > ./test.mli
+output="$(./plugin_loader-standalone.exe ./test 2>&1)"
 if [ "$output" = $'loaded' ]; then
     echo 'loaded fine'
 else
@@ -143,8 +153,58 @@ else
 fi
 echo
 
+echo 'loading file with a wrong name'
+echo > invalid-name.ml
+output="$(./plugin_loader-standalone.exe invalid-name.ml 2>&1)"
+if grep -q 'not a valid ocaml' <<< "$output"; then
+    echo "wrong module names are rejected"
+else
+    echo "broken test: $output"
+fi
+echo
 
+echo 'loading names that collide'
+echo > Test.ml
+output="$(./plugin_loader-standalone.exe test.ml Test.ml 2>&1)"
+if grep -q 'Several implementations' <<< "$output"; then
+    echo "detected"
+else
+    echo "broken test: $output"
+fi
+echo
 
+echo 'loading mli that collide'
+echo > Test.mli
+output="$(./plugin_loader-standalone.exe test.mli Test.mli 2>&1)"
+if grep -q 'Several interface' <<< "$output"; then
+    echo "detected"
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading ml and mli with different basenames but same module name'
+echo 'let x = 2' > test.ml
+echo 'val x : string' > Test.mli
+output="$(./plugin_loader-standalone.exe test.ml Test.mli 2>&1)"
+if grep -q 'Signature mismatch' <<< "$output"; then
+    echo type error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading ml and mli from different dirs'
+echo 'let x = 2' > test.ml
+echo 'val x : int' > test.mli
+echo 'val x : string' > tmp_dir/Test.mli
+output="$(./plugin_loader-standalone.exe test.ml tmp_dir/Test.mli 2>&1)"
+if grep -q 'Signature mismatch' <<< "$output"; then
+    echo type error as expected
+else
+    echo "broken test: $output"
+fi
+echo
 
 # TODO
 # echo 'check what happens on ocaml version change'
