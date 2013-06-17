@@ -17,25 +17,13 @@ open Async.Std
 type t
 
 (**
-   This is the convention over the name of the embedded section's name.
-   The executable should contain such a section, or this module
-   won't work. The convention is that this should be tgz file.
-*)
-val section_id : string
-
-(**
    The convention over the name of pervasives inside the archive
 *)
 val pervasives : string
 
 val config_file : string
 
-(** This returns the full path to the executable of the current process. *)
-val get_my_code_file : unit -> string Deferred.t
-
-type 'a create_arguments =
-  ?code_file : [`my_code | `file of string]
-  -> 'a Ocaml_dynloader.create_arguments
+type 'a create_arguments = 'a Ocaml_dynloader.create_arguments
 
 (**
    This is a special utilisation of the Generic Loader.
@@ -78,24 +66,12 @@ val loader : t -> Ocaml_dynloader.t
 val force : t -> unit Deferred.Or_error.t
 
 (**
-   This allow you to know the list of the filename contained in the archive.
-   This forces the initialization setup (tempdir, extraction)
-*)
-val files : t -> string list Deferred.Or_error.t
-
-
-(**
    If for some reason you need to know where everything happens.
    This directory is an absolute pathname.
    This forces the initialization setup (tempdir, extraction).
    see also lazy_directory.
 *)
 val directory : t -> string Deferred.Or_error.t
-
-(**
-   returning both at the same time
-*)
-val directory_files : t -> (string * string list) Deferred.Or_error.t
 
 (**
    This deferred gets computed once the setup has been achieved.

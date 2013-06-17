@@ -4,7 +4,7 @@
   looking at the build dir while the application is still running, experimenting various
   failure scenarios, etc.
   run with:
-  rlwrap ./run-standalone.exe
+  rlwrap ./run.exe
   enter ml filename(s) to load: plugin_001.ml
 *)
 

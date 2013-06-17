@@ -2,3 +2,4 @@
 # OASIS_STOP
 <{bin,lib,test}/*.ml{,i}>: syntax_camlp4o
 <**/*_standalone.native>: linkall
+<**/*.native> and (not ("bin/ocaml_embed_compiler.native" or <**/*_standalone.native>)): link_fake_archive

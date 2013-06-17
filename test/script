@@ -11,7 +11,7 @@ trap 'rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.m
 rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml Test.mli
 
 echo 'Loading non existing mli'
-output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+output="$(./plugin_loader.exe ./test.mli 2>&1)"
 if grep -q 'No such file or directory' <<< "$output"; then
     echo 'failed the expected way'
 else
@@ -20,7 +20,7 @@ fi
 echo
 
 echo 'Loading non existing ml'
-output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
 if grep -q 'No such file or directory' <<< "$output"; then
     echo 'failed the expected way'
 else
@@ -30,7 +30,7 @@ echo
 
 echo > test.mli
 echo 'Loading mli without ml'
-output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+output="$(./plugin_loader.exe ./test.mli 2>&1)"
 rm -f test.mli
 if grep -q 'No such file or directory' <<< "$output"; then
     echo 'loaded fine'
@@ -41,7 +41,7 @@ echo
 
 echo 'Loading ml without mli'
 echo 'print_string "loaded\n"' > ./test.ml
-output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
 if [ "$output" = $'loaded' ]; then
     echo 'loaded fine'
 else
@@ -51,7 +51,7 @@ echo
 
 echo 'Loading ml with mli by mentioning ml'
 echo > ./test.mli
-output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
 if [ "$output" = $'loaded' ]; then
     echo 'loaded fine'
 else
@@ -61,7 +61,7 @@ echo
 
 echo 'Loading ml with mli by mentioning ml without extension'
 echo > ./test.mli
-output="$(./plugin_loader-standalone.exe ./test 2>&1)"
+output="$(./plugin_loader.exe ./test 2>&1)"
 if [ "$output" = $'loaded' ]; then
     echo 'loaded fine'
 else
@@ -71,7 +71,7 @@ echo
 
 echo 'Loading ml with mli by mentioning mli'
 echo > ./test.mli
-output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+output="$(./plugin_loader.exe ./test.mli 2>&1)"
 if [ "$output" = $'loaded' ]; then
     echo 'loaded fine'
 else
@@ -81,7 +81,7 @@ echo
 
 echo 'Loading ml with mli by mentioning wrong mli'
 echo 'val a : int' > test.mli
-output="$(./plugin_loader-standalone.exe ./test.mli 2>&1)"
+output="$(./plugin_loader.exe ./test.mli 2>&1)"
 if grep -q 'The field `a'\'' is required' <<< "$output"; then
     echo 'failed fine'
 else
@@ -91,7 +91,7 @@ echo
 
 rm test.mli
 echo 'loading the same ml file several times'
-output="$(./plugin_loader-standalone.exe 'test.ml | test.ml | test.ml | test2.ml' 2>&1)"
+output="$(./plugin_loader.exe 'test.ml | test.ml | test.ml | test2.ml' 2>&1)"
 if [ "$(grep '^loaded$' <<< "$output")" = $'loaded\nloaded\nloaded' ]; then
     echo 'really loaded several times'
 else
@@ -100,7 +100,7 @@ fi
 echo
 
 echo 'loading the same ml file several times with a cache'
-output="$(./plugin_loader-standalone.exe cache 'test.ml | test.ml' 2>&1; ./plugin_loader-standalone.exe cache 'test.ml | test.ml' 2>&1)"
+output="$(./plugin_loader.exe cache 'test.ml | test.ml' 2>&1; ./plugin_loader.exe cache 'test.ml | test.ml' 2>&1)"
 if [ "$(grep '^loaded$' <<< "$output")" = $'loaded\nloaded\nloaded\nloaded' ]; then
     if [ "$(find cache -type f -name '*.cmxs' | wc -l)" = 1 ]; then
         echo 'really loaded several times, and compiled once'
@@ -115,12 +115,12 @@ echo
 echo 'Checking that it really is using the cache'
 cmxs_before="$(find cache -type f -name '*.cmxs')"
 echo 'print_string "somethingelse"' > test2.ml
-output1="$(./plugin_loader-standalone.exe cache 'test2.ml' 2>&1)"
+output1="$(./plugin_loader.exe cache 'test2.ml' 2>&1)"
 cmxs_after="$(find cache -type f -name '*.cmxs')"
 new_cmxs="$(comm -23 <(sort -u <<< "$cmxs_after") <(sort -u <<< "$cmxs_before"))"
-output2="$(./plugin_loader-standalone.exe cache 'test.ml' 2>&1)"
+output2="$(./plugin_loader.exe cache 'test.ml' 2>&1)"
 for i in $cmxs_before; do cp $new_cmxs $i; done
-output3="$(./plugin_loader-standalone.exe cache 'test.ml' 2>&1)"
+output3="$(./plugin_loader.exe cache 'test.ml' 2>&1)"
 if [ "$output1""$output2""$output3" = "somethingelse""loaded""somethingelse" ]; then
     echo "perfect"
 else
@@ -133,7 +133,7 @@ echo
 
 echo 'Loading ml that blows up at toplevel'
 echo 'let () = failwith "blowup"' > test.ml
-output="$(./plugin_loader-standalone.exe ./test.ml 2>&1)"
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
 if grep -q 'Failure blowup' <<< "$output"; then
     echo 'failed fine'
 else
@@ -145,7 +145,7 @@ echo 'loading several ml files'
 echo 'let x = Test2.x ^ "-middle"' > test1.ml
 echo 'let x = "first"' > test2.ml
 echo 'let x = Test1.x ^ "-last";; print_endline x' > test3.ml
-output="$(./plugin_loader-standalone.exe test2.ml test1.ml test3.ml 2>&1)"
+output="$(./plugin_loader.exe test2.ml test1.ml test3.ml 2>&1)"
 if [ "$output" = 'first-middle-last' ]; then
     echo 'loaded in the right order and with the right scope'
 else
@@ -155,7 +155,7 @@ echo
 
 echo 'loading file with a wrong name'
 echo > invalid-name.ml
-output="$(./plugin_loader-standalone.exe invalid-name.ml 2>&1)"
+output="$(./plugin_loader.exe invalid-name.ml 2>&1)"
 if grep -q 'not a valid ocaml' <<< "$output"; then
     echo "wrong module names are rejected"
 else
@@ -165,7 +165,7 @@ echo
 
 echo 'loading names that collide'
 echo > Test.ml
-output="$(./plugin_loader-standalone.exe test.ml Test.ml 2>&1)"
+output="$(./plugin_loader.exe test.ml Test.ml 2>&1)"
 if grep -q 'Several implementations' <<< "$output"; then
     echo "detected"
 else
@@ -175,7 +175,7 @@ echo
 
 echo 'loading mli that collide'
 echo > Test.mli
-output="$(./plugin_loader-standalone.exe test.mli Test.mli 2>&1)"
+output="$(./plugin_loader.exe test.mli Test.mli 2>&1)"
 if grep -q 'Several interface' <<< "$output"; then
     echo "detected"
 else
@@ -186,7 +186,7 @@ echo
 echo 'loading ml and mli with different basenames but same module name'
 echo 'let x = 2' > test.ml
 echo 'val x : string' > Test.mli
-output="$(./plugin_loader-standalone.exe test.ml Test.mli 2>&1)"
+output="$(./plugin_loader.exe test.ml Test.mli 2>&1)"
 if grep -q 'Signature mismatch' <<< "$output"; then
     echo type error as expected
 else
@@ -198,7 +198,7 @@ echo 'loading ml and mli from different dirs'
 echo 'let x = 2' > test.ml
 echo 'val x : int' > test.mli
 echo 'val x : string' > tmp_dir/Test.mli
-output="$(./plugin_loader-standalone.exe test.ml tmp_dir/Test.mli 2>&1)"
+output="$(./plugin_loader.exe test.ml tmp_dir/Test.mli 2>&1)"
 if grep -q 'Signature mismatch' <<< "$output"; then
     echo type error as expected
 else

@@ -113,7 +113,7 @@ let run_lines = make_run ~quiet_or_error:false
   )
 
 let mkdir_p ?(perm=permission_exe) path =
-  run "/bin/mkdir" [ "-p" ; sprintf "--mode=%o" perm ; "--" ; path ]
+  run "/bin/mkdir" [ "-p" ; sprintf "-m0%o" perm ; "--" ; path ]
 
 let getcwd () =
   Deferred.Or_error.try_with ~name:"Ocaml_plugin.Shell.getcwd" Sys.getcwd

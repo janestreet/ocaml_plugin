@@ -7,6 +7,15 @@ let dispatch = function
     Options.make_links := false
 
   | After_rules ->
+    rule "ocaml_fake_archive_dll"
+      ~deps:["bin/ocaml_fake_archive.o"]
+      ~prod:"bin/ocaml_fake_archive.so"
+      (fun env _build ->
+        Cmd (S [P"ld"; A"-shared"; A"-o"; P"bin/ocaml_fake_archive.so";
+                P"bin/ocaml_fake_archive.o"]));
+    flag ["file:lib/ocaml_plugin.cma"; "link"]
+      (S[A"-dllib"; P"bin/ocaml_fake_archive.so"]);
+    flag ["link_fake_archive"; "link"] (P "bin/ocaml_fake_archive.o");
     let env = BaseEnvLight.load () in
     let stdlib = BaseEnvLight.var_get "standard_library" env in
     rule "standalone"
@@ -78,7 +87,6 @@ let dispatch = function
                     (StringSet.elements cmxs_set))]
         in
         Cmd (S [P ocaml_embed_compiler;
-                A "-exe"; A (env "%.native");
                 camlp4;
                 A "-cc"; A ocamlopt;
                 S (List.map (fun cmi -> A cmi) (StringSet.elements cmi_set));
