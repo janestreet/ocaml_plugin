@@ -39,6 +39,8 @@ Library ocaml_plugin
                       bin_prot.syntax,
                       fieldslib (>= 109.20.00),
                       fieldslib.syntax,
+                      herelib,
+                      herelib.syntax,
                       threads
   XMETARequires:      dynlink,
                       async,
@@ -47,54 +49,43 @@ Library ocaml_plugin
                       fieldslib,
                       threads
 
+Library ocaml_plugin_fake_archive
+  Path:               bin
+  FindlibName:        fake
+  FindlibParent:      ocaml_plugin
+  Modules:            Ocaml_plugin_dummy
+  CSources:           ocaml_fake_archive.c
+
 Executable "ocaml-embed-compiler"
   MainIs:             ocaml_embed_compiler.ml
   Path:               bin
-  CSources:           ocaml_fake_archive.c
-  Install:            true
-  BuildDepends:       ocaml_plugin,sexplib.syntax,herelib.syntax,threads
+  BuildDepends:       ocaml_plugin,ocaml_plugin.fake,sexplib.syntax,threads
   CompiledObject:     native
 
-PostInstallCommand: ocamlfind install -add ocaml_plugin _build/bin/ocaml_fake_archive.o -dll _build/bin/dllocaml-embed-compiler_stubs.so
+Library ocaml_plugin_sample_archive
+  Path:               bin
+  Install:            false
+  BuildDepends:       ocaml_plugin,type_conv,sexplib
+  Modules:            Ocaml_plugin_dummy
+  CSources:           ocaml_sample_archive.c
 
 Executable "hello-world"
   Install:            false
   MainIs:             run.ml
   Path:               hello_world
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     native
-
-Executable "hello-world-standalone"
-  Install:            false
-  MainIs:             run_standalone.ml
-  Path:               hello_world
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads,ocaml_plugin_sample_archive
   CompiledObject:     native
 
 Executable "sample"
   Install:            false
   MainIs:             run.ml
   Path:               sample
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     native
-
-Executable "sample-standalone"
-  Install:            false
-  MainIs:             run_standalone.ml
-  Path:               sample
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads,ocaml_plugin_sample_archive
   CompiledObject:     native
 
 Executable "test"
   Install:            false
   MainIs:             plugin_loader.ml
   Path:               test
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
-  CompiledObject:     native
-
-Executable "test-standalone"
-  Install:            false
-  MainIs:             plugin_loader_standalone.ml
-  Path:               test
-  BuildDepends:       ocaml_plugin,sexplib.syntax,threads
+  BuildDepends:       ocaml_plugin,sexplib.syntax,threads,ocaml_plugin_sample_archive
   CompiledObject:     native

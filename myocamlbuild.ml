@@ -7,90 +7,30 @@ let dispatch = function
     Options.make_links := false
 
   | After_rules ->
-    rule "ocaml_fake_archive_dll"
-      ~deps:["bin/ocaml_fake_archive.o"]
-      ~prod:"bin/ocaml_fake_archive.so"
-      (fun env _build ->
-        Cmd (S [P"ld"; A"-shared"; A"-o"; P"bin/ocaml_fake_archive.so";
-                P"bin/ocaml_fake_archive.o"]));
-    flag ["file:lib/ocaml_plugin.cma"; "link"]
-      (S[A"-dllib"; P"bin/ocaml_fake_archive.so"]);
-    flag ["link_fake_archive"; "link"] (P "bin/ocaml_fake_archive.o");
     let env = BaseEnvLight.load () in
     let stdlib = BaseEnvLight.var_get "standard_library" env in
-    rule "standalone"
-      ~deps:["%.native"; "bin/ocaml_embed_compiler.native"]
-      ~prod:"%_standalone.native"
-      (fun env build ->
-        let ocaml_embed_compiler = "bin/ocaml_embed_compiler.native" in
-        let ocamlopt = Command.search_in_path "ocamlopt.opt" in
-        let camlp4o = Command.search_in_path "camlp4o.opt" in
-
-        (* Build the list of explicit dependencies. *)
-        let packages =
-          Tags.fold
-            (fun tag packages ->
-              if String.is_prefix "pkg_" tag then
-                let idx = try String.index tag '.' with Not_found -> String.length tag in
-                StringSet.add (String.sub tag 4 (idx - 4)) packages
-              else
-                packages)
-            (tags_of_pathname (env "%_standalone.native"))
-            StringSet.empty
-        in
-
-        (* Build the list of dependencies. *)
-        let deps =
-          Findlib.topological_closure
-            (List.map Findlib.query (StringSet.elements packages))
-        in
-        (* Build the set of locations of dependencies. *)
-        let locs =
-          List.fold_left
-            (fun set pkg -> StringSet.add pkg.Findlib.location set)
-            StringSet.empty deps
-        in
-        (* Directories to search for .cmi and .cmxs (for camlp4o): *)
-        let directories =
-          List.fold_left
-            (fun acc dir -> StringSet.add dir acc)
-            locs
-            ["lib";
-             Pathname.dirname (env "%");
-             stdlib;
-             stdlib / "threads"]
-        in
-        (* List of .cmi and .cmxs (for camlp4o.opt): *)
-        let cmi_set, cmxs_set =
-          StringSet.fold
-            (fun directory acc ->
-              List.fold_left
-                (fun (cmi_set, cmxs_set) fname ->
-                  if Pathname.check_extension fname "cmi" then
-                    (StringSet.add (directory / fname) cmi_set, cmxs_set)
-                  else if Pathname.check_extension fname "cmxs"
-                      && String.is_prefix "pa_" fname then
-                    (cmi_set, StringSet.add (directory / fname) cmxs_set)
-                  else
-                    (cmi_set, cmxs_set))
-                acc
-                (Array.to_list (Pathname.readdir directory)))
-            directories (StringSet.empty, StringSet.empty)
-        in
-        let camlp4 =
-          if StringSet.is_empty cmxs_set then
-            S []
-          else
-            S [A "-pp"; P camlp4o;
-               S (List.map
-                    (fun cmxs -> S [A "-pa-cmxs"; P cmxs])
-                    (StringSet.elements cmxs_set))]
-        in
-        Cmd (S [P ocaml_embed_compiler;
-                camlp4;
-                A "-cc"; A ocamlopt;
-                S (List.map (fun cmi -> A cmi) (StringSet.elements cmi_set));
-                A "-o"; A (env "%_standalone.native")]))
+    rule "ocaml_plugin standalone archive"
+      ~deps:["lib/ocaml_plugin.cmi";
+             "sample/dsl.cmi";
+             "hello_world/plugin_intf.cmi";
+             "bin/ocaml_embed_compiler.native"]
+      ~prod:"bin/ocaml_sample_archive.c"
+      (fun _ _ ->
+        let loc pkg = (Findlib.query pkg).Findlib.location in
+        Cmd (S [P "bin/ocaml_embed_compiler.native";
+                A "-pp"; P (Command.search_in_path "camlp4o.opt");
+                A "-pa-cmxs"; P (loc "type_conv" / "pa_type_conv.cmxs");
+                A "-pa-cmxs"; P (loc "sexplib" / "pa_sexp_conv.cmxs");
+                A "-pa-cmxs"; P (loc "fieldslib" / "pa_fields_conv.cmxs");
+                A "-cc"; A (Command.search_in_path "ocamlopt.opt");
+                A (stdlib / "pervasives.cmi");
+                A (loc "core" / "core.cmi");
+                A (loc "fieldslib" / "fieldslib.cmi");
+                A (loc "sexplib" / "sexplib.cmi");
+                A "lib/ocaml_plugin.cmi";
+                A "sample/dsl.cmi";
+                A "hello_world/plugin_intf.cmi";
+                A "-o"; A "bin/ocaml_sample_archive.c"]))
 
   | _ ->
     ()
