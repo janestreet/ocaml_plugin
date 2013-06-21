@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: b8a35bb5ecee46e9b71edb6bde647c06)
+version = "109.30.00"
+description = "Automatically build and load OCaml source files"
+requires = "ocaml_plugin type_conv sexplib"
+archive(byte) = "ocaml_plugin_sample_archive.cma"
+archive(byte, plugin) = "ocaml_plugin_sample_archive.cma"
+archive(native) = "ocaml_plugin_sample_archive.cmxa"
+archive(native, plugin) = "ocaml_plugin_sample_archive.cmxs"
+exists_if = "ocaml_plugin_sample_archive.cma"
+# OASIS_STOP
+
