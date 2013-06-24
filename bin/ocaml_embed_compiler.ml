@@ -2,76 +2,50 @@ open Core.Std
 open Async.Std
 open Ocaml_plugin.Std
 
-let verbose = ref false
-let target = ref None
-let ocamlopt_opt = ref None
-let camlp4o_opt = ref None
-let pa_files = ref []
-
 let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)
 let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
 
 module Flags =
 struct
 
-  module Spec = struct
-    let set tag ~doc ref_ () =
-      Command.Spec.(step (fun main bool ->
-        if bool then ref_ := true;
-        main) +> flag tag no_arg ~doc)
-
-    let set_string_opt tag ~doc ref_ () =
-      Command.Spec.(step (fun main str ->
-        ref_ := str;
-        main) +> flag tag (optional string) ~doc)
-
-    let string tag ~doc fct () =
-      Command.Spec.(step (fun main strings ->
-        List.iter ~f:fct strings;
-        main) +> flag tag (listed string) ~doc)
-  end
-
   let ocamlopt_opt =
-    Spec.set_string_opt
-      "-cc"
-      ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
-      ocamlopt_opt
+    Command.Spec.(flag "-cc"
+            ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
+            (required file))
 
   let camlp4o_opt =
-    Spec.set_string_opt
-      "-pp"
-      ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
-      camlp4o_opt
+    Command.Spec.(flag "-pp"
+            ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
+            (optional file))
 
   let pa_files =
-    Spec.string
-      "-pa-cmxs"
-      ~doc:" path to a native syntax extension plugin file (.cmxs)"
-      (fun file -> pa_files := file :: !pa_files)
+    Command.Spec.(flag "-pa-cmxs"
+            ~doc:"<file.cmxs> path to a native syntax extension plugin file"
+            (listed file))
 
   let target =
-    Spec.set_string_opt
-      "-o"
-      ~doc:"<file.c> set the name of the c file to be created"
-      target
+    Command.Spec.(flag "-o"
+            ~doc:"<file.c> set the name of the c file to be created"
+            (required file))
 
   let verbose =
-    Spec.set
-      "-verbose"
-      ~doc:" be more verbose"
-      verbose
+    Command.Spec.(flag "-verbose"
+            ~doc:" be more verbose"
+            no_arg)
 
-  let files () =
+  let files =
     Command.Spec.(anon (sequence ("<embedded-file>*" %: file)))
 
-  let all () = Command.Spec.(step (fun main files -> main files)
-    ++ ocamlopt_opt ()
-    ++ camlp4o_opt ()
-    ++ pa_files ()
-    ++ target ()
-    ++ verbose ()
-    +> files ()
-  )
+  let all =
+    Command.Spec.(
+      empty
+      +> ocamlopt_opt
+      +> camlp4o_opt
+      +> pa_files
+      +> target
+      +> verbose
+      +> files
+    )
 end
 
 let readme () = "\
@@ -83,14 +57,6 @@ not need it."
 
 let summary =
   "tool to embed ocamlopt and cmi files into a c file"
-
-let usage_arg = "-o <exe> -cc </path/to/ocamlopt.opt> -exe </path/to/exe> embedded-files*"
-
-let get name opt =
-  match !opt with
-  | Some data -> data
-  | None ->
-    failwithf "%s is unspecified" name ()
 
 exception Suspicious_files_in_tar of string list * string list with sexp
 exception Missing_files_in_tar of string list * string list with sexp
@@ -139,19 +105,16 @@ let generate_c_file target tar =
       sprintf "  value v = caml_alloc_string(%d);" (String.length str);
       sprintf "  memcpy(String_val(v), s, %d);" (String.length str);
       "  return(v);";
-      "}"
+      "}";
+      ""; (* error from gcc on centos5 if there is no newline at the end of file *)
     ]);
     Writer.close w
   )
 
-let main files () =
+let main ocamlopt_opt camlp4o_opt pa_files target verbose files () =
   let _set_defaults_scope =
-    let verbose = !verbose in
-    let echo = verbose in
-    Ocaml_plugin.Shell.set_defaults ~verbose ~echo ();
+    Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
   in
-  let target = get "-o" target in
-  let ocamlopt_opt = get "-cc" ocamlopt_opt in
   Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name >>=! fun tmpdir ->
   let seen = String.Table.create () in
   let cp ~filename ~basename =
@@ -181,14 +144,14 @@ let main files () =
   cp ~filename:ocamlopt_opt ~basename:Ocaml_dynloader.ocamlopt_opt >>= fun () ->
   let files = Ocaml_dynloader.ocamlopt_opt :: files in
   (
-    match !camlp4o_opt with
+    match camlp4o_opt with
     | None ->
-      begin match !pa_files with
+      begin match pa_files with
       | [] -> Deferred.return []
       | _ -> failwith "syntax extension files given, but the -camlp4 flag is absent"
       end
     | Some camlp4o_opt ->
-      Deferred.List.map ~how:`Parallel (List.rev !pa_files) ~f:copy_file
+      Deferred.List.map ~how:`Parallel pa_files ~f:copy_file
       >>= fun pa_files ->
       let config = { Ocaml_dynloader.Config. pa_files } in
       let config_file = tmpdir ^/ Ocaml_compiler.config_file in
@@ -212,9 +175,7 @@ let main files () =
     Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ()
 
 let command =
-  Command.async_basic ~summary ~readme (
-    Flags.all ()
-  ) main
+  Command.async_basic ~summary ~readme Flags.all main
 
 let () =
   Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
