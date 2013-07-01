@@ -34,7 +34,7 @@ struct
             no_arg)
 
   let files =
-    Command.Spec.(anon (sequence ("<embedded-file>*" %: file)))
+    Command.Spec.(anon (sequence ("<embedded-file>" %: file)))
 
   let all =
     Command.Spec.(
@@ -76,6 +76,10 @@ let tar_check files tar =
     then raise (Missing_files_in_tar (missing, files));
   )
 
+let escape =
+  let a = Array.init ~f:(Printf.sprintf "\\x%02x") 256 in
+  fun c -> a.(Char.to_int c)
+
 let generate_c_file target tar =
   Monitor.try_with ~here:_here_ (fun () ->
     Reader.file_contents tar >>= fun str ->
@@ -86,19 +90,14 @@ let generate_c_file target tar =
       "#include <caml/memory.h>";
       "#include <caml/alloc.h>";
       "";
-      "static unsigned char s[] = { ";
+      "static char s[] = \"";
     ]);
     for i = 0 to String.length str - 1 do
       let c = str.[i] in
-      let n = Char.to_int c in
-      let column = i mod 16 in
-      Writer.write w (if column = 0 then "\n  " else "");
-      Writer.write w (string_of_int n);
-      Writer.write w ",";
+      Writer.write w (escape c)
     done;
-    if String.length str mod 16 <> 0 then Writer.write w "\n";
     Writer.write w (String.concat ~sep:"\n" [
-      "};";
+      "\";";
       "";
       "CAMLprim value ocaml_plugin_archive (value unit __attribute__ ((unused)))";
       "{";

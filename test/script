@@ -7,8 +7,11 @@ exec 2>&1
 # could go inside and use the debug info maybe?
 tmpdirs_before="$(echo tmp_dir/ocaml_plugin*)"
 
-trap 'rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml Test.mli' EXIT INT QUIT
-rm -rf cache tmp_dir; rm -f test.ml test.mli test{1,2,3}.ml invalid-name.ml Test.ml Test.mli
+function cleanup {
+    rm -rf cache tmp_dir test{,1,2,3}.ml{,i} invalid-name.ml Test.ml{,i}
+}
+trap 'cleanup' EXIT INT QUIT
+cleanup
 
 echo 'Loading non existing mli'
 output="$(./plugin_loader.exe ./test.mli 2>&1)"
@@ -100,7 +103,7 @@ fi
 echo
 
 echo 'loading the same ml file several times with a cache'
-output="$(./plugin_loader.exe cache 'test.ml | test.ml' 2>&1; ./plugin_loader.exe cache 'test.ml | test.ml' 2>&1)"
+output="$(./plugin_loader.exe --cache 'test.ml | test.ml' 2>&1; ./plugin_loader.exe --cache 'test.ml | test.ml' 2>&1)"
 if [ "$(grep '^loaded$' <<< "$output")" = $'loaded\nloaded\nloaded\nloaded' ]; then
     if [ "$(find cache -type f -name '*.cmxs' | wc -l)" = 1 ]; then
         echo 'really loaded several times, and compiled once'
@@ -115,12 +118,12 @@ echo
 echo 'Checking that it really is using the cache'
 cmxs_before="$(find cache -type f -name '*.cmxs')"
 echo 'print_string "somethingelse"' > test2.ml
-output1="$(./plugin_loader.exe cache 'test2.ml' 2>&1)"
+output1="$(./plugin_loader.exe --cache 'test2.ml' 2>&1)"
 cmxs_after="$(find cache -type f -name '*.cmxs')"
 new_cmxs="$(comm -23 <(sort -u <<< "$cmxs_after") <(sort -u <<< "$cmxs_before"))"
-output2="$(./plugin_loader.exe cache 'test.ml' 2>&1)"
+output2="$(./plugin_loader.exe --cache 'test.ml' 2>&1)"
 for i in $cmxs_before; do cp $new_cmxs $i; done
-output3="$(./plugin_loader.exe cache 'test.ml' 2>&1)"
+output3="$(./plugin_loader.exe --cache 'test.ml' 2>&1)"
 if [ "$output1""$output2""$output3" = "somethingelse""loaded""somethingelse" ]; then
     echo "perfect"
 else
@@ -205,6 +208,111 @@ else
     echo "broken test: $output"
 fi
 echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli test2.mli
+echo 'let x = "Test1.x"' >  test1.ml
+echo 'let y = "Test1.y"' >> test1.ml
+echo 'let x = Test1.x  ' >  test2.ml
+echo 'let y = Test1.y'   >> test2.ml
+echo 'let () = print_endline (x^y)' >> test2.ml
+output="$(./plugin_loader.exe test1.ml test2.ml 2>&1)"
+if [ "$output" = 'Test1.xTest1.y' ]; then
+    echo 'loaded ml and mli without warnings'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli test2.mli
+echo 'let x = "Test1.x"' >  test1.ml
+echo 'let y = "Test1.y"' >> test1.ml
+echo 'let x = Test1.x  ' >  test2.ml
+echo 'let () = print_endline x' >> test2.ml
+output="$(./plugin_loader.exe test1.ml test2.ml 2>&1)"
+if grep -q 'Warning 32: unused value y' <<< "$output"; then
+    echo warn error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli test2.mli
+echo 'let x = "Test1.x"' >  test1.ml
+echo 'let y = "Test1.y"' >> test1.ml
+echo 'val x : string'    >  test1.mli
+echo 'val y : string'    >> test1.mli
+echo 'let x = Test1.x  ' >  test2.ml
+echo 'let () = print_endline x' >> test2.ml
+output="$(./plugin_loader.exe test1.ml test2.ml 2>&1)"
+if [ "$output" = 'Test1.x' ]; then
+    echo 'loaded ml and mli without warnings'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli test2.mli
+echo 'let x = "Test1.x"' >  test1.ml
+echo 'let y = "Test1.y"' >> test1.ml
+echo 'val x : string'    >  test1.mli
+echo 'val y : string'    >> test1.mli
+echo 'let x = Test1.x  ' >  test2.ml
+echo 'let () = print_endline x' >> test2.ml
+output="$(./plugin_loader.exe --warnings-in-utils test1.ml test2.ml 2>&1)"
+if grep -q 'Warning 32: unused value y' <<< "$output"; then
+    echo warn error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli
+echo 'let x = "x"' >  test1.ml
+echo 'let y = "y"' >> test1.ml
+echo 'let () = print_endline y' >> test1.ml
+output="$(./plugin_loader.exe test1.ml 2>&1)"
+if grep -q 'Warning 32: unused value x' <<< "$output"; then
+    echo warn error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli
+echo 'let x = "x"' >  test1.ml
+echo 'let y = "y"' >> test1.ml
+echo 'let () = print_endline y' >> test1.ml
+echo 'val x : string'    >  test1.mli
+echo 'val y : string'    >> test1.mli
+output="$(./plugin_loader.exe test1.ml 2>&1)"
+if [ "$output" = 'y' ]; then
+    echo 'loaded ml and mli without warnings'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking unused variables warnings'
+rm -f test1.mli
+echo 'let x = "x"' >  test1.ml
+echo 'let y = "y"' >> test1.ml
+echo 'let () = print_endline y' >> test1.ml
+echo 'val x : string'    >  test1.mli
+echo 'val y : string'    >> test1.mli
+output="$(./plugin_loader.exe --warnings-in-utils test1.ml 2>&1)"
+if grep -q 'Warning 32: unused value y' <<< "$output"; then
+    echo warn error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
 
 # TODO
 # echo 'check what happens on ocaml version change'

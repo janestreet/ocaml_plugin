@@ -17,6 +17,7 @@ type t = {
   mutable cleaned : bool;
   cmx_flags : string list;
   cmxs_flags : string list;
+  trigger_unused_value_warnings_despite_mli : bool;
   compilation_config : (string * Config.t option) Or_error.t Lazy_deferred.t;
   include_directories : string list;
   ocamlopt_opt : string;
@@ -120,6 +121,7 @@ type 'a create_arguments =
   -> ?custom_warnings_spec:string
   -> ?cmx_flags:string list
   -> ?cmxs_flags:string list
+  -> ?trigger_unused_value_warnings_despite_mli:bool
   -> ?use_cache:Plugin_cache.Config.t
   -> 'a
 
@@ -129,6 +131,7 @@ let create
     ?(custom_warnings_spec = default_warnings_spec)
     ?(cmx_flags = [])
     ?(cmxs_flags = [])
+    ?(trigger_unused_value_warnings_despite_mli = false)
     ?use_cache
     ?initialize_compilation_callback
     ?(ocamlopt_opt = ocamlopt_opt)
@@ -154,6 +157,7 @@ let create
       cleaned;
       cmx_flags;
       cmxs_flags;
+      trigger_unused_value_warnings_despite_mli;
       compilation_config;
       include_directories;
       ocamlopt_opt;
@@ -192,7 +196,11 @@ exception Dynlink_error of string with sexp
 
 module Compile : sig
 
-  val copy_files : working_dir:string -> Plugin_uuid.t -> string Deferred.Or_error.t
+  val copy_files :
+    trigger_unused_value_warnings_despite_mli:bool
+    -> working_dir:string
+    -> Plugin_uuid.t
+    -> string Deferred.Or_error.t
 
   val dynlink :
     ?export:bool
@@ -215,41 +223,58 @@ end = struct
 
   let permission = 0o600
 
-  let copy_files ~working_dir plugin_uuid =
+  let copy_files ~trigger_unused_value_warnings_despite_mli ~working_dir plugin_uuid =
     let fct () =
       let repr_opt = Plugin_uuid.repr plugin_uuid in
-      let with_bundle ~last_module out_channel bundle =
-        let `ml filename, `mli intf_filename_opt, `module_name module_name =
-          Ml_bundle.to_pathnames bundle
-        in
-        Printf.fprintf out_channel "module %s " module_name;
-        begin match intf_filename_opt with
-        | None ->
-          begin match repr_opt with
-          | Some repr when last_module ->
-            Printf.fprintf out_channel ": %s = struct\n" (Plugin_uuid.Repr.t repr)
-          | _ ->
-            Printf.fprintf out_channel "= struct\n"
+      let with_bundle ~outer_sig ~last_module out_channel bundle =
+        if not (outer_sig && trigger_unused_value_warnings_despite_mli) then begin
+          let `ml filename, `mli intf_filename_opt, `module_name module_name =
+            Ml_bundle.to_pathnames bundle
+          in
+          Printf.fprintf out_channel "module %s" module_name;
+          begin match intf_filename_opt with
+          | None ->
+            begin match repr_opt with
+            | Some repr when last_module ->
+              Printf.fprintf out_channel " : %s" (Plugin_uuid.Repr.t repr);
+            | _ ->
+              (* Normally adding a signature on an implementation adds warnings, but here
+                 because no signature means that it defaults [sig end], adding a signature
+                 removes warnings. *)
+              if outer_sig then
+                Printf.fprintf out_channel " : sig end"
+            end
+          | Some intf_filename ->
+            Printf.fprintf out_channel " : sig\n";
+            Printf.fprintf out_channel "#1 %S\n" intf_filename;
+            In_channel.with_file ~binary:false intf_filename
+              ~f:(output_in_channel out_channel);
+            Printf.fprintf out_channel "\nend";
+          end;
+          if outer_sig
+          then
+            Printf.fprintf out_channel "\n"
+          else begin
+            Printf.fprintf out_channel " = struct\n";
+            Printf.fprintf out_channel "#1 %S\n" filename;
+            In_channel.with_file filename
+              ~binary:false
+              ~f:(output_in_channel out_channel);
+            Printf.fprintf out_channel "\nend\n";
+            if last_module then begin
+              match repr_opt with
+              | None -> ()
+              | Some repr ->
+                Printf.fprintf out_channel (
+                  "let () =\n" ^^
+                    "  let module P = Ocaml_plugin.Plugin_table in\n" ^^
+                    "  P.register ~plugin_uuid %s (module %s : %s)\n"
+                )
+                  (Plugin_uuid.Repr.univ_constr repr)
+                  module_name
+                  (Plugin_uuid.Repr.t repr)
+            end
           end
-        | Some intf_filename ->
-          Printf.fprintf out_channel " : sig\n";
-          Printf.fprintf out_channel "#1 %S\n" intf_filename;
-          In_channel.with_file ~binary:false intf_filename
-            ~f:(output_in_channel out_channel);
-          Printf.fprintf out_channel "\nend = struct\n";
-        end;
-        Printf.fprintf out_channel "#1 %S\n" filename;
-        In_channel.with_file ~binary:false filename ~f:(output_in_channel out_channel);
-        Printf.fprintf out_channel "\nend\n";
-        if last_module then begin
-          match repr_opt with
-          | None -> ()
-          | Some repr ->
-            Printf.fprintf out_channel (
-              "let () =\n" ^^
-              "  let module P = Ocaml_plugin.Plugin_table in\n" ^^
-              "  P.register ~plugin_uuid %s (module %s : %s)\n"
-            ) (Plugin_uuid.Repr.univ_constr repr) module_name (Plugin_uuid.Repr.t repr)
         end
       in
       let target = next_filename () in
@@ -264,9 +289,15 @@ end = struct
           Printf.fprintf out_channel
             "let plugin_uuid = Ocaml_plugin.Plugin_uuid.t_of_string %S\n"
             (Plugin_uuid.string_of_t plugin_uuid);
-          List.iter utils ~f:(with_bundle ~last_module:false out_channel);
-          with_bundle ~last_module:true out_channel last;
-
+          let iter_bundle ~outer_sig =
+            List.iter utils ~f:(with_bundle ~outer_sig ~last_module:false out_channel);
+            with_bundle ~outer_sig ~last_module:true out_channel last;
+          in
+          Printf.fprintf out_channel "module T : sig\n";
+          iter_bundle ~outer_sig:true;
+          Printf.fprintf out_channel "end\n = struct\n";
+          iter_bundle ~outer_sig:false;
+          Printf.fprintf out_channel "end\n";
         );
       target
     in
@@ -343,7 +374,14 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     Lazy_deferred.force_exn t.compilation_config >>=? fun (working_dir, config_opt) ->
     let t = update_with_config t config_opt in
     let plugin_uuid = Plugin_uuid.create ~repr ~ml_bundles () in
-    Compile.copy_files ~working_dir plugin_uuid >>=? fun basename ->
+    let trigger_unused_value_warnings_despite_mli =
+      t.trigger_unused_value_warnings_despite_mli
+    in
+    Compile.copy_files
+      ~trigger_unused_value_warnings_despite_mli
+      ~working_dir
+      plugin_uuid
+    >>=? fun basename ->
     Compile.compile_and_load_file ~working_dir ~plugin_uuid t ~export:false ~basename
     >>|? fun cmxs_filename ->
     plugin_uuid, cmxs_filename

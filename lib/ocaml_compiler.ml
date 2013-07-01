@@ -90,6 +90,7 @@ let create
     ?custom_warnings_spec
     ?cmx_flags
     ?cmxs_flags
+    ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     () =
   let initialize = ref None in
@@ -132,6 +133,7 @@ let create
     ?custom_warnings_spec
     ~cmx_flags
     ~cmxs_flags
+    ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ~initialize_compilation_callback
     ~ocamlopt_opt
@@ -159,6 +161,7 @@ let with_compiler
     ?custom_warnings_spec
     ?cmx_flags
     ?cmxs_flags
+    ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ()
     ~f
@@ -169,6 +172,7 @@ let with_compiler
     ?custom_warnings_spec
     ?cmx_flags
     ?cmxs_flags
+    ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ()
     >>=? function `this_needs_manual_cleaning_after compiler ->
@@ -184,6 +188,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?custom_warnings_spec
       ?cmx_flags
       ?cmxs_flags
+      ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       files =
     let f compiler =
@@ -196,6 +201,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?custom_warnings_spec
       ?cmx_flags
       ?cmxs_flags
+      ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ()
       ~f

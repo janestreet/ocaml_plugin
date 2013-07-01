@@ -52,3 +52,24 @@ type error as expected
 loading ml and mli from different dirs
 type error as expected
 
+checking unused variables warnings
+loaded ml and mli without warnings
+
+checking unused variables warnings
+warn error as expected
+
+checking unused variables warnings
+loaded ml and mli without warnings
+
+checking unused variables warnings
+warn error as expected
+
+checking unused variables warnings
+warn error as expected
+
+checking unused variables warnings
+loaded ml and mli without warnings
+
+checking unused variables warnings
+warn error as expected
+

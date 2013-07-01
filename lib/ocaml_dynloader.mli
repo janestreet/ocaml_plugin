@@ -83,6 +83,15 @@ type 'a create_arguments =
      Same thing for cmxs compilation
   *)
 
+  -> ?trigger_unused_value_warnings_despite_mli:bool
+  (**
+     When the files of a plugin export values in some mli but no one is using them,
+     unused value warnings are not triggered.
+     However, by explicitly setting this parameter to [true] they will be triggered. This
+     might come in handy to detect dead code in a large plugin that uses multiple
+     files.
+  *)
+
   -> ?use_cache:Plugin_cache.Config.t
   (**
      By default, there is no cache. If a config is given, cmxs files
