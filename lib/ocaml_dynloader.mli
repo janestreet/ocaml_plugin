@@ -98,6 +98,17 @@ type 'a create_arguments =
      may be used from an execution to an other.
   *)
 
+  -> ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
+  (**
+     If a plugin has some blocking calls at toplevel that are synchronous, one may want to
+     run the plugin's toplevel execution under an [In_thread.run] to make sure it is not
+     going to block the main thread. To do it, set this parameter to [`Outside_of_async].
+     On the other hand, doing so will prevent the user from having Async functions calls
+     at toplevel, unless [Thread_safe] is used carefully.
+     The default is [`In_async_thread], meaning this library tends to be more friendly
+     with async plugins, as it is probably the most common use for it.
+  *)
+
   -> 'a
 
 val create : (
@@ -156,6 +167,11 @@ val compilation_config :
 val clean : t -> unit Deferred.Or_error.t
 exception Usage_of_cleaned_dynloader with sexp
 
+module Univ_constr : sig
+  type 'a t = 'a Univ.Constr.t
+  val create : unit -> 'a t
+end
+
 module type Module_type =
 sig
   (**
@@ -194,7 +210,7 @@ sig
   *)
   type t
   val t_repr : string
-  val univ_constr : t Univ.Constr.t
+  val univ_constr : t Univ_constr.t
   val univ_constr_repr : string
 
   (*
@@ -228,4 +244,12 @@ end
     modules. *)
 val load_ocaml_src_files :
   t -> string list -> unit Deferred.Or_error.t
+
+(* =============================================================== *)
+(* The following section is for internal use only*)
+module type Side_effect = sig
+end
+val side_effect_univ_constr : (module Side_effect) Univ_constr.t
+val return_plugin : 'a Univ_constr.t -> (unit -> 'a) -> unit
+(* =============================================================== *)
 

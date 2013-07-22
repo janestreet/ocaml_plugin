@@ -52,24 +52,28 @@ type error as expected
 loading ml and mli from different dirs
 type error as expected
 
-checking unused variables warnings
+checking unused variables warnings 1
 loaded ml and mli without warnings
 
-checking unused variables warnings
+checking unused variables warnings 2
 warn error as expected
 
-checking unused variables warnings
+checking unused variables warnings 3
 loaded ml and mli without warnings
 
-checking unused variables warnings
+checking unused variables warnings 4
 warn error as expected
 
-checking unused variables warnings
+checking unused variables warnings 5
 warn error as expected
 
-checking unused variables warnings
+checking unused variables warnings 6
 loaded ml and mli without warnings
 
-checking unused variables warnings
+checking unused variables warnings 7
 warn error as expected
+
+checking run_plugin_toplevel parameter
+loaded ml in async by default
+loaded ml outside of async if requested
 

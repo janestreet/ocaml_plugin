@@ -5,12 +5,14 @@ open Ocaml_plugin.Std
 let run
     ?use_cache
     ~trigger_unused_value_warnings_despite_mli
+    ~run_plugin_toplevel
     files =
   Sys.getcwd () >>= fun cwd ->
   let in_dir = Filename.concat cwd "tmp_dir" in
   Ocaml_compiler.load_ocaml_src_files
     ~in_dir
     ~trigger_unused_value_warnings_despite_mli
+    ~run_plugin_toplevel
     ?use_cache
     files >>= function
   | Ok () -> Deferred.unit
@@ -41,6 +43,11 @@ module Flags = struct
     flag "--warnings-in-utils" no_arg
       ~doc:" trigger unused warnings even in utils with an mli"
 
+  let run_plugin_toplevel () =
+    map ~f:(fun b -> if b then `Outside_of_async else `In_async_thread)
+      (flag "--toplevel-outside-of-async" no_arg
+         ~doc:" execute plugin's toplevel outside of async")
+
   let anon_files () =
     anon (sequence ("<ocaml-file>" %: file))
 end
@@ -52,10 +59,12 @@ let command =
     empty
     +> Flags.use_cache ()
     +> Flags.trigger_unused_value_warnings_despite_mli ()
+    +> Flags.run_plugin_toplevel ()
     +> Flags.anon_files ()
   )) (fun
     use_cache
     trigger_unused_value_warnings_despite_mli
+    run_plugin_toplevel
     files
     ()
   ->
@@ -63,6 +72,7 @@ let command =
       run
         ?use_cache
         ~trigger_unused_value_warnings_despite_mli
+        ~run_plugin_toplevel
     ) >>= fun () ->
     return (Shutdown.shutdown 0)
   )

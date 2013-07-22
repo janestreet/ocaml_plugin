@@ -11,26 +11,15 @@ module Repr : sig
   val univ_constr : t -> string
 end
 
-type t
+type t with sexp
 
 val uuid : t -> Uuid.t
 
-include Sexpable with type t := t
-include Comparable.S with type t := t
-include Hashable.S with type t := t
-
 val create :
-  repr:Repr.t option
+  repr:Repr.t
   -> ml_bundles:Ml_bundle.t list
   -> unit
   -> t
 
 val ml_bundles : t -> Ml_bundle.t list
-val repr : t -> Repr.t option
-
-(*
-  via Sexp.of_string,
-  so that the generated plugin doesn't needlessly depends on sexplib.cmi
-*)
-val t_of_string : string -> t
-val string_of_t : t -> string
+val repr : t -> Repr.t

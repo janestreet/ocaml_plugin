@@ -1,4 +1,5 @@
 open Core.Std
+open Ocaml_plugin.Std
 
 type t1 = string
 let make_v1 s = s
@@ -8,9 +9,8 @@ sig
   val job : t1
 end
 
-let univ_constr_v1 =
-  (Univ.Constr.create "Dsl.Config_intf_v1" sexp_of_opaque :
-     (module Config_intf_v1) Univ.Constr.t)
+let univ_constr_v1 : (module Config_intf_v1) Ocaml_dynloader.Univ_constr.t =
+  Ocaml_dynloader.Univ_constr.create ()
 
 type t2 = string
 let make_v2 s = s
@@ -20,9 +20,9 @@ sig
   val job : t2
 end
 
-let univ_constr_v2 =
-  (Univ.Constr.create "Dsl.Config_intf_v2" sexp_of_opaque :
-     (module Config_intf_v2) Univ.Constr.t)
+let univ_constr_v2 : (module Config_intf_v2) Ocaml_dynloader.Univ_constr.t =
+  Ocaml_dynloader.Univ_constr.create ()
+
 
 let table_v1 = ref ([] : (module Config_intf_v1) list)
 let register_v1 m = table_v1 := m :: !table_v1

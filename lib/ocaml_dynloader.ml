@@ -26,6 +26,7 @@ type t = {
                              from the config will be added right before generating the
                              command lines *)
   cache : Plugin_cache.t Or_error.t Lazy_deferred.t option;
+  run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ];
 } with fields
 
 let next_filename () =
@@ -123,6 +124,7 @@ type 'a create_arguments =
   -> ?cmxs_flags:string list
   -> ?trigger_unused_value_warnings_despite_mli:bool
   -> ?use_cache:Plugin_cache.Config.t
+  -> ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
   -> 'a
 
 let create
@@ -133,6 +135,7 @@ let create
     ?(cmxs_flags = [])
     ?(trigger_unused_value_warnings_despite_mli = false)
     ?use_cache
+    ?(run_plugin_toplevel = `In_async_thread)
     ?initialize_compilation_callback
     ?(ocamlopt_opt = ocamlopt_opt)
     ?(camlp4o_opt = camlp4o_opt)
@@ -164,6 +167,7 @@ let create
       camlp4o_opt;
       pa_files;
       cache;
+      run_plugin_toplevel;
     } in
   Deferred.return (Ok t)
 
@@ -183,16 +187,29 @@ let clean t =
       result
   end
 
+module Univ_constr = struct
+  type 'a t = 'a Univ.Constr.t
+  let name = "Ocaml_plugin.Std.Ocaml_dynloader.Univ_constr.t"
+  let create () = Univ.Constr.create name sexp_of_opaque
+end
+
 module type Module_type =
 sig
   type t
   val t_repr : string
-  val univ_constr : t Univ.Constr.t
+  val univ_constr : t Univ_constr.t
   val univ_constr_repr : string
 end
 
 exception No_file_to_compile with sexp
 exception Dynlink_error of string with sexp
+
+exception Plugin_did_not_return with sexp
+exception Return_plugin of (unit -> Univ.t)
+
+let return_plugin (type a) (constr : a Univ_constr.t) (fct : unit -> a) =
+  let fct () = Univ.create constr (fct ()) in
+  raise (Return_plugin fct)
 
 module Compile : sig
 
@@ -204,16 +221,14 @@ module Compile : sig
 
   val dynlink :
     ?export:bool
-    -> plugin_uuid:Plugin_uuid.t
-    -> string -> unit Deferred.Or_error.t
+    -> string -> (unit -> Univ.t) Deferred.Or_error.t
 
   val compile_and_load_file :
     working_dir:string
-    -> plugin_uuid:Plugin_uuid.t
     -> t
     -> ?export:bool
     -> basename:Core.Std.String.Hash_set.elt
-    -> string Async.Std.Deferred.Or_error.t
+    -> (string * (unit -> Univ.t)) Async.Std.Deferred.Or_error.t
 
 end = struct
 
@@ -225,31 +240,36 @@ end = struct
 
   let copy_files ~trigger_unused_value_warnings_despite_mli ~working_dir plugin_uuid =
     let fct () =
-      let repr_opt = Plugin_uuid.repr plugin_uuid in
+      let repr = Plugin_uuid.repr plugin_uuid in
       let with_bundle ~outer_sig ~last_module out_channel bundle =
-        if not (outer_sig && trigger_unused_value_warnings_despite_mli) then begin
+        if not outer_sig || not trigger_unused_value_warnings_despite_mli || last_module
+        then begin
           let `ml filename, `mli intf_filename_opt, `module_name module_name =
             Ml_bundle.to_pathnames bundle
           in
           Printf.fprintf out_channel "module %s" module_name;
           begin match intf_filename_opt with
           | None ->
-            begin match repr_opt with
-            | Some repr when last_module ->
-              Printf.fprintf out_channel " : %s" (Plugin_uuid.Repr.t repr);
-            | _ ->
-              (* Normally adding a signature on an implementation adds warnings, but here
-                 because no signature means that it defaults [sig end], adding a signature
-                 removes warnings. *)
+            if last_module
+            then
+              Printf.fprintf out_channel " : %s" (Plugin_uuid.Repr.t repr)
+            else
+              (* Normally adding a signature on an implementation adds warnings, but
+                 here because no signature means that it defaults to [sig end], adding a
+                 signature removes warnings. *)
               if outer_sig then
                 Printf.fprintf out_channel " : sig end"
-            end
           | Some intf_filename ->
-            Printf.fprintf out_channel " : sig\n";
-            Printf.fprintf out_channel "#1 %S\n" intf_filename;
-            In_channel.with_file ~binary:false intf_filename
-              ~f:(output_in_channel out_channel);
-            Printf.fprintf out_channel "\nend";
+            if outer_sig && trigger_unused_value_warnings_despite_mli && last_module
+            then
+              Printf.fprintf out_channel " : %s" (Plugin_uuid.Repr.t repr)
+            else begin
+              Printf.fprintf out_channel " : sig\n";
+              Printf.fprintf out_channel "#1 %S\n" intf_filename;
+              In_channel.with_file ~binary:false intf_filename
+                ~f:(output_in_channel out_channel);
+              Printf.fprintf out_channel "\nend";
+            end
           end;
           if outer_sig
           then
@@ -261,44 +281,43 @@ end = struct
               ~binary:false
               ~f:(output_in_channel out_channel);
             Printf.fprintf out_channel "\nend\n";
-            if last_module then begin
-              match repr_opt with
-              | None -> ()
-              | Some repr ->
-                Printf.fprintf out_channel (
-                  "let () =\n" ^^
-                    "  let module P = Ocaml_plugin.Plugin_table in\n" ^^
-                    "  P.register ~plugin_uuid %s (module %s : %s)\n"
-                )
-                  (Plugin_uuid.Repr.univ_constr repr)
-                  module_name
-                  (Plugin_uuid.Repr.t repr)
-            end
           end
         end
       in
       let target = next_filename () in
       let full_target = working_dir ^/ target in
-      Out_channel.with_file ~binary:false ~perm:permission full_target
-        ~f:(fun out_channel ->
-          let utils, last =
-            match List.rev (Plugin_uuid.ml_bundles plugin_uuid) with
-            | [] -> raise No_file_to_compile
-            | last :: utils -> List.rev utils, last
-          in
-          Printf.fprintf out_channel
-            "let plugin_uuid = Ocaml_plugin.Plugin_uuid.t_of_string %S\n"
-            (Plugin_uuid.string_of_t plugin_uuid);
-          let iter_bundle ~outer_sig =
-            List.iter utils ~f:(with_bundle ~outer_sig ~last_module:false out_channel);
-            with_bundle ~outer_sig ~last_module:true out_channel last;
-          in
-          Printf.fprintf out_channel "module T : sig\n";
-          iter_bundle ~outer_sig:true;
-          Printf.fprintf out_channel "end\n = struct\n";
-          iter_bundle ~outer_sig:false;
-          Printf.fprintf out_channel "end\n";
-        );
+      let with_out_channel out_channel =
+        let utils, last =
+          match List.rev (Plugin_uuid.ml_bundles plugin_uuid) with
+          | [] -> raise No_file_to_compile
+          | last :: utils -> List.rev utils, last
+        in
+        let main_module_name = Ml_bundle.module_name last in
+        let iter_bundle ~outer_sig =
+          List.iter utils ~f:(with_bundle ~outer_sig ~last_module:false out_channel);
+          with_bundle ~outer_sig ~last_module:true out_channel last;
+        in
+        Printf.fprintf out_channel "module F (X : sig end) : sig\n";
+        iter_bundle ~outer_sig:true;
+        Printf.fprintf out_channel "end\n = struct\n";
+        iter_bundle ~outer_sig:false;
+        Printf.fprintf out_channel "end\n";
+        Printf.fprintf out_channel (
+          "let () =\n" ^^
+          "  let module R = Ocaml_plugin.Ocaml_dynloader in\n" ^^
+          "  R.return_plugin %s (fun () ->\n" ^^
+          "    let module M = F(struct end) in\n" ^^
+          "    (module M.%s : %s))\n"
+        )
+          (Plugin_uuid.Repr.univ_constr repr)
+          main_module_name
+          (Plugin_uuid.Repr.t repr)
+      in
+      Out_channel.with_file full_target
+        ~binary:false
+        ~perm:permission
+        ~f:with_out_channel
+      ;
       target
     in
     Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
@@ -313,20 +332,21 @@ end = struct
      and files not in the cache are called $tmp_dir/something_$fresh.cmxs.
      We can't have several Ocaml_dynloader.t use the same directory, because ocaml_plugin
      always create a fresh directory in which to put its files. *)
-  let blocking_dynlink ?(export=false) ~plugin_uuid file =
+  let blocking_dynlink ?(export=false) file =
     let loadfile = if export then Dynlink.loadfile else Dynlink.loadfile_private in
     try
-      loadfile file
+      loadfile file;
+      raise Plugin_did_not_return
     with
     | Dynlink.Error e ->
-      Plugin_table.remove ~plugin_uuid;
       raise (Dynlink_error (Dynlink.error_message e))
+    | Return_plugin univ -> univ
 
-  let dynlink ?export ~plugin_uuid cmxs_filename =
-    let fct () = blocking_dynlink ?export ~plugin_uuid cmxs_filename in
+  let dynlink ?export cmxs_filename =
+    let fct () = blocking_dynlink ?export cmxs_filename in
     Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
-  let compile_and_load_file ~working_dir ~plugin_uuid t ?export ~basename =
+  let compile_and_load_file ~working_dir t ?export ~basename =
     let basename_without_ext =
       try Filename.chop_extension basename
       with Invalid_argument _ -> basename
@@ -362,8 +382,8 @@ end = struct
     Shell.run ~quiet_or_error:true ~working_dir t.ocamlopt_opt create_cmxs_args
     >>=? fun () ->
     let cmxs = working_dir ^/ cmxs in
-    dynlink ?export ~plugin_uuid cmxs >>|? fun () ->
-    cmxs
+    dynlink ?export cmxs >>|? fun univ ->
+    cmxs, univ
 end
 
 exception Usage_of_cleaned_dynloader with sexp
@@ -382,29 +402,26 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
       ~working_dir
       plugin_uuid
     >>=? fun basename ->
-    Compile.compile_and_load_file ~working_dir ~plugin_uuid t ~export:false ~basename
-    >>|? fun cmxs_filename ->
-    plugin_uuid, cmxs_filename
+    Compile.compile_and_load_file ~working_dir t ~export:false ~basename
+    >>|? fun res -> plugin_uuid, res
   in
   Shell.absolute_pathnames filenames >>=? fun filenames ->
   Ml_bundle.from_filenames filenames >>=? fun ml_bundles ->
   match t.cache with
-  | None -> compile_without_cache ml_bundles >>|? fun (plugin_uuid, _) -> plugin_uuid
+  | None -> compile_without_cache ml_bundles >>|? fun (_, (_, univ)) -> univ
   | Some cache ->
     Lazy_deferred.force_exn cache >>=? fun cache ->
     Plugin_cache.digest ml_bundles >>=? fun sources ->
     let refresh_cache () =
-      compile_without_cache ml_bundles >>=? fun (plugin_uuid, cmxs_filename) ->
+      compile_without_cache ml_bundles >>=? fun (plugin_uuid, (cmxs_filename, univ)) ->
       Plugin_cache.add cache sources plugin_uuid cmxs_filename >>|? fun () ->
-      plugin_uuid
+      univ
     in
     match Plugin_cache.find cache sources with
     | Some plugin -> begin
       let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
-      let plugin_uuid = Plugin_cache.Plugin.plugin_uuid plugin in
-      Compile.dynlink ~plugin_uuid cmxs_filename >>= function
-      | Ok () ->
-        Deferred.Or_error.return plugin_uuid
+      Compile.dynlink cmxs_filename >>= function
+      | Ok _ as ok -> Deferred.return ok
       | Error _ as error ->
         if Plugin_cache.old_cache_with_new_exec cache
         then
@@ -431,23 +448,37 @@ module Make (X:Module_type) =
 struct
   let load_ocaml_src_files t filenames =
     let repr = Plugin_uuid.Repr.create ~t:X.t_repr ~univ_constr:X.univ_constr_repr in
-    load_ocaml_src_files_plugin_uuid ~repr:(Some repr) t filenames >>| fun result ->
-    Or_error.bind result (fun plugin_uuid ->
-      match Plugin_table.find_and_remove ~plugin_uuid () with
-      | None -> Or_error.of_exn (Plugin_not_found plugin_uuid)
-      | Some black -> (
-          (* There is an hidden invariant there: if the OCaml compilation succeed, that
-             means that the loaded module has the type represented in X.repr, so the
-             [Univ.match_] will succeed. Of course this is only true is the user gave
-             a valid Module_type in the first place. *)
-            match Univ.match_ black X.univ_constr with
-            | Some t -> Ok t
-            | None ->
-              Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
-      ))
+    load_ocaml_src_files_plugin_uuid ~repr t filenames >>=? fun make_plugin ->
+    (* There is an hidden invariant there: if the OCaml compilation succeed, that
+       means that the loaded module has the type represented in X.repr, so the
+       [Univ.match_] will succeed. Of course this is only true is the user gave
+       a valid Module_type in the first place. *)
+    let run () =
+      try begin
+        let univ = make_plugin () in
+        match Univ.match_ univ X.univ_constr with
+        | Some plugin -> Ok plugin
+        | None ->
+          Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
+      end with exn -> Or_error.of_exn exn
+    in
+    match t.run_plugin_toplevel with
+    | `In_async_thread  -> Deferred.return (run ())
+    | `Outside_of_async -> In_thread.run run
 end
 
+module type Side_effect = sig
+end
+
+let side_effect_univ_constr = Univ_constr.create ()
+
+module Side_effect_loader = Make(struct
+  type t = (module Side_effect)
+  let t_repr = "Ocaml_plugin.Ocaml_dynloader.Side_effect"
+  let univ_constr = side_effect_univ_constr
+  let univ_constr_repr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
+end)
+
 let load_ocaml_src_files t filenames =
-  load_ocaml_src_files_plugin_uuid ~repr:None t filenames
-  >>|? fun (_ : Plugin_uuid.t) ->
-  ()
+  Side_effect_loader.load_ocaml_src_files t filenames
+  >>|? fun (_ : (module Side_effect)) -> ()

@@ -205,7 +205,8 @@ module State = struct
     deprecated_plugins : Plugin.t Queue.t;
   }
 
-  exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of string with sexp
+  exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of
+      string * Error.t with sexp
 
   let del_cmxs path filename =
     if Filename.check_suffix filename "cmxs" then
@@ -228,7 +229,7 @@ module State = struct
       end
     in
     Info.load ~dir:config_dir >>= function
-    | Error _ ->
+    | Error error ->
       (* the info file exists but could not be read or could not be parsed *)
       if Config.readonly t.config then
         (* if the config is readonly, then we would rather make an error instead of
@@ -236,7 +237,7 @@ module State = struct
            of a sudden, for reasons that could be hard to debug. *)
         Deferred.Or_error.of_exn
           (Read_only_info_file_exists_but_cannot_be_read_or_parsed
-             (Info.info_file_pathname ~dir:config_dir))
+             (Info.info_file_pathname ~dir:config_dir, error))
       else
         (* If it is a permissions error, recreating the info file will fail and we will
            get a proper error. If it is a parsing error, we will just clean the possibly

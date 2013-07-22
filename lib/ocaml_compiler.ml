@@ -92,6 +92,7 @@ let create
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
+    ?run_plugin_toplevel
     () =
   let initialize = ref None in
   let initialize_compilation_callback ~directory:working_dir =
@@ -135,6 +136,7 @@ let create
     ~cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
+    ?run_plugin_toplevel
     ~initialize_compilation_callback
     ~ocamlopt_opt
     ~camlp4o_opt
@@ -163,6 +165,7 @@ let with_compiler
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
+    ?run_plugin_toplevel
     ()
     ~f
     =
@@ -174,6 +177,7 @@ let with_compiler
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
+    ?run_plugin_toplevel
     ()
     >>=? function `this_needs_manual_cleaning_after compiler ->
   Shell.Deferred.Or_error.try_with_join ~extract_exn:true (fun () -> f compiler)
@@ -190,6 +194,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
+      ?run_plugin_toplevel
       files =
     let f compiler =
       let loader = loader compiler in
@@ -203,6 +208,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
+      ?run_plugin_toplevel
       ()
       ~f
   in

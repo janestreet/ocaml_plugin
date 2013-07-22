@@ -1,9 +1,8 @@
-open Core.Std
+open Ocaml_plugin.Std
 
 module type S = sig
   val message : string
 end
 
-let univ_constr =
-  (Univ.Constr.create "Plugin_intf.S" sexp_of_opaque : (module S) Univ.Constr.t)
-
+let univ_constr : (module S) Ocaml_dynloader.Univ_constr.t =
+  Ocaml_dynloader.Univ_constr.create ()

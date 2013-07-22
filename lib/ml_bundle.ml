@@ -101,3 +101,5 @@ let from_filenames filenames =
 
 let to_pathnames { ml; mli; module_name } =
   `ml ml, `mli mli, `module_name module_name
+
+let module_name t = t.module_name

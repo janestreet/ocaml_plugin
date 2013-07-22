@@ -209,7 +209,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 1'
 rm -f test1.mli test2.mli
 echo 'let x = "Test1.x"' >  test1.ml
 echo 'let y = "Test1.y"' >> test1.ml
@@ -224,7 +224,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 2'
 rm -f test1.mli test2.mli
 echo 'let x = "Test1.x"' >  test1.ml
 echo 'let y = "Test1.y"' >> test1.ml
@@ -238,7 +238,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 3'
 rm -f test1.mli test2.mli
 echo 'let x = "Test1.x"' >  test1.ml
 echo 'let y = "Test1.y"' >> test1.ml
@@ -254,7 +254,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 4'
 rm -f test1.mli test2.mli
 echo 'let x = "Test1.x"' >  test1.ml
 echo 'let y = "Test1.y"' >> test1.ml
@@ -270,7 +270,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 5'
 rm -f test1.mli
 echo 'let x = "x"' >  test1.ml
 echo 'let y = "y"' >> test1.ml
@@ -283,7 +283,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 6'
 rm -f test1.mli
 echo 'let x = "x"' >  test1.ml
 echo 'let y = "y"' >> test1.ml
@@ -298,7 +298,7 @@ else
 fi
 echo
 
-echo 'checking unused variables warnings'
+echo 'checking unused variables warnings 7'
 rm -f test1.mli
 echo 'let x = "x"' >  test1.ml
 echo 'let y = "y"' >> test1.ml
@@ -308,6 +308,24 @@ echo 'val y : string'    >> test1.mli
 output="$(./plugin_loader.exe --warnings-in-utils test1.ml 2>&1)"
 if grep -q 'Warning 32: unused value y' <<< "$output"; then
     echo warn error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'checking run_plugin_toplevel parameter'
+rm -f test.mli
+rm -f test.ml
+echo 'let () = Core.Std.Caml.Printf.printf "%b\n%!" (Async.Std.Thread_safe.am_holding_async_lock ())' > test.ml
+output="$(./plugin_loader.exe test.ml 2>&1)"
+if [ "$output" = 'true' ]; then
+    echo 'loaded ml in async by default'
+else
+    echo "broken test: $output"
+fi
+output="$(./plugin_loader.exe --toplevel-outside-of-async test.ml 2>&1)"
+if [ "$output" = 'false' ]; then
+    echo 'loaded ml outside of async if requested'
 else
     echo "broken test: $output"
 fi

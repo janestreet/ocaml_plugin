@@ -29,7 +29,6 @@ module Plugin : sig
   type t
   val cmxs_filename : t -> string
   val sources : t -> Sources.t
-  val plugin_uuid : t -> Plugin_uuid.t
 end
 
 module Config : sig
