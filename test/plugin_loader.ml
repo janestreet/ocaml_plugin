@@ -16,7 +16,10 @@ let run
     ?use_cache
     files >>= function
   | Ok () -> Deferred.unit
-  | Error e -> Error.raise e
+  | Error e ->
+    prerr_endline (Error.to_string_hum e);
+    return (Shutdown.shutdown 1)
+;;
 
 let groups l =
   List.map (String.split ~on:'|' (String.concat l ~sep:" ")) ~f:(fun s ->
