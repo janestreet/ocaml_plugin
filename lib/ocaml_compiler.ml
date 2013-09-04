@@ -88,6 +88,7 @@ let create
     ?in_dir
     ?include_directories
     ?custom_warnings_spec
+    ?strict_sequence
     ?cmx_flags
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
@@ -132,6 +133,7 @@ let create
     ?in_dir
     ?include_directories
     ?custom_warnings_spec
+    ?strict_sequence
     ~cmx_flags
     ~cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
@@ -161,6 +163,7 @@ let with_compiler
     ?in_dir
     ?include_directories
     ?custom_warnings_spec
+    ?strict_sequence
     ?cmx_flags
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
@@ -173,6 +176,7 @@ let with_compiler
     ?in_dir
     ?include_directories
     ?custom_warnings_spec
+    ?strict_sequence
     ?cmx_flags
     ?cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
@@ -190,6 +194,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?in_dir
       ?include_directories
       ?custom_warnings_spec
+      ?strict_sequence
       ?cmx_flags
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
@@ -204,6 +209,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?in_dir
       ?include_directories
       ?custom_warnings_spec
+      ?strict_sequence
       ?cmx_flags
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli

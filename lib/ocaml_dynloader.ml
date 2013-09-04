@@ -120,6 +120,7 @@ type 'a create_arguments =
   ?in_dir:string
   -> ?include_directories:string list
   -> ?custom_warnings_spec:string
+  -> ?strict_sequence:bool
   -> ?cmx_flags:string list
   -> ?cmxs_flags:string list
   -> ?trigger_unused_value_warnings_despite_mli:bool
@@ -131,6 +132,7 @@ let create
     ?(in_dir = Filename.temp_dir_name)
     ?(include_directories = [])
     ?(custom_warnings_spec = default_warnings_spec)
+    ?(strict_sequence = true)
     ?(cmx_flags = [])
     ?(cmxs_flags = [])
     ?(trigger_unused_value_warnings_despite_mli = false)
@@ -145,6 +147,11 @@ let create
   let cmx_flags =
     [ "-w" ; custom_warnings_spec ; "-warn-error" ; "+a" ]
     @ cmx_flags
+  in
+  let cmx_flags =
+    if strict_sequence
+    then "-strict-sequence" :: cmx_flags
+    else cmx_flags
   in
   if not Dynlink.is_native then Deferred.Or_error.of_exn Is_not_native else
   Shell.absolute_pathnames include_directories >>=? fun include_directories ->

@@ -72,6 +72,10 @@ type 'a create_arguments =
      The format of the string is documented by ocamlopt -help. e.g. "+a-4-7-9-29-28"
   *)
 
+  -> ?strict_sequence:bool
+  (** use or don't use -strict-sequence during compilation. Set to [true] by default, so
+      that it is consistent with the policy used in core, async, etc. *)
+
   -> ?cmx_flags:string list
   (**
      Add some flags to the compilation producing the cmx file.
