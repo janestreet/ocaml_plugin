@@ -1,5 +1,6 @@
 open Core.Std
 open Async.Std
+open Import
 
 module Build_info : sig
   type t with sexp
@@ -18,16 +19,19 @@ let parallel list ~f =
 
 module Digest : sig
   type t with compare, sexp
+  include Stringable with type t := t
   val file : filename -> t Deferred.Or_error.t
+  val string : string -> t
 end = struct
-  type t = string with compare, sexp
+  include String
 
-  let file filename =
-    let fct () =
-      let raw = Digest.file filename in
-      Digest.to_hex raw
-    in
-    Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+  let to_hex fct arg = Digest.to_hex (fct arg)
+
+  let file arg =
+    let fct () = to_hex Digest.file arg in
+    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+
+  let string arg = to_hex Digest.string arg
 end
 
 module Key = struct
@@ -58,7 +62,7 @@ module Plugin = struct
 end
 
 module Info : sig
-  type t
+  type t with sexp_of
 
   val create :
     plugins: Plugin.t list
@@ -110,7 +114,7 @@ end = struct
   let info_file_pathname ~dir = dir ^/ cache_dir ^/ info_file
 
   let save ~dir t =
-    Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+    Deferred.Or_error.try_with ~extract_exn:true (fun () ->
       Writer.save_sexp ~perm:cache_files_perm (info_file_pathname ~dir) (sexp_of_t t)
     )
 
@@ -119,7 +123,7 @@ end = struct
     (* do no check for `Read there, let the reader fail in that case *)
     Unix.access pathname [ `Exists ] >>= function
     | Ok () -> begin
-      Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Reader.load_sexp_exn ~exclusive:true pathname t_of_sexp
       )
     end
@@ -185,13 +189,13 @@ module Config = struct
       readonly;
       try_old_cache_with_new_exec;
     }
-
 end
 
 module State = struct
 
   type t = {
     config : Config.t;
+    mutable has_write_lock : bool;
     mutable index : int;
     mutable old_cache_with_new_exec : bool;
     (* This field is true when the build info of the cache doesn't match and the config
@@ -214,19 +218,48 @@ module State = struct
     else
       Deferred.Or_error.return ()
 
+  let info t =
+    let plugins = Key.Table.data t.table in
+    let plugins = List.rev_map ~f:snd plugins in
+    Info.create ~plugins ()
+
+  let save_info t =
+    Info.save ~dir:(Config.dir t.config) (info t)
+
+  exception Cannot_take_plugin_cache_lock of string with sexp
+
+  let lock_filename t =
+    let config_dir = Config.dir t.config in
+    config_dir ^/ Info.cache_dir ^ ".lock"
+
+  (* this lock is taken only if we actually need to modify the info. it is cleaned by the
+     Nfs lock library at exit *)
+  let take_write_lock t =
+    if t.has_write_lock then Deferred.Or_error.return ()
+    else
+      let lock_filename = lock_filename t in
+      In_thread.run (fun () ->
+        try Core.Std.Lock_file.Nfs.create lock_filename with _ -> false
+      ) >>| function
+      | true ->
+        t.has_write_lock <- true;
+        Ok ()
+      | false ->
+        Or_error.of_exn (Cannot_take_plugin_cache_lock lock_filename)
+
   let load_info t =
     let config_dir = Config.dir t.config in
     let reset_cache_if_writable info =
-      if Config.readonly t.config
-      then
-        Deferred.return (Ok ())
-      else begin
+      if_ (not (Config.readonly t.config)) (fun () ->
+        let dir = Config.dir t.config ^/ Info.cache_dir in
+        Shell.mkdir_p ~perm:Info.cache_dir_perm dir >>=? fun () ->
+        take_write_lock t >>=? fun () ->
         Info.save ~dir:config_dir Info.empty >>=? fun () ->
         parallel ~f:Plugin.clean (Info.plugins info) >>=? fun () ->
         let cache_dir = config_dir ^/ Info.cache_dir in
         Shell.readdir cache_dir >>=? fun files ->
         Deferred.Or_error.List.iter (Array.to_list files) ~f:(del_cmxs cache_dir)
-      end
+      )
     in
     Info.load ~dir:config_dir >>= function
     | Error error ->
@@ -279,24 +312,18 @@ module State = struct
     let config = { config with Config.dir = config_dir } in
     let old_cache_with_new_exec = false in
     let old_files_deleted = false in
+    let has_write_lock = false in
     let state = {
       index;
       old_cache_with_new_exec;
       old_files_deleted;
       config;
+      has_write_lock;
       table;
       deprecated_plugins;
     } in
     load_info state >>=? fun () ->
     Deferred.return (Ok state)
-
-  let info t =
-    let plugins = Key.Table.data t.table in
-    let plugins = List.rev_map ~f:snd plugins in
-    Info.create ~plugins ()
-
-  let save_info t =
-    Info.save ~dir:(Config.dir t.config) (info t)
 
   let clean_old t =
     assert (not (Config.readonly t.config));
@@ -359,14 +386,13 @@ module State = struct
       None
 
   let add t sources plugin_uuid filename =
-    if Config.readonly t.config
-    then Deferred.return (Ok ())
-    else begin
+    if_ (not (Config.readonly t.config)) (fun () ->
       let key = Sources.key sources in
       let dir = Config.dir t.config ^/ Info.cache_dir in
       Shell.mkdir_p ~perm:Info.cache_dir_perm dir >>=? fun () ->
+      take_write_lock t >>=? fun () ->
       let uuid = Plugin_uuid.uuid plugin_uuid in
-      let cmxs_filename = dir ^/ (Uuid.to_string uuid)^".cmxs" in
+      let cmxs_filename = dir ^/ (Uuid.to_string uuid) ^ ".cmxs" in
       Shell.cp ~source:filename ~dest:cmxs_filename >>=? fun () ->
       Shell.chmod cmxs_filename ~perm:Info.cache_dir_perm >>=? fun () ->
       let plugin = {
@@ -380,7 +406,17 @@ module State = struct
       Key.Table.set t.table ~key ~data:(index, plugin);
       clean_old t >>=? fun () ->
       save_info t
-    end
+    )
+
+  let clean t =
+    let had_lock = t.has_write_lock in
+    t.has_write_lock <- false;
+    if_ had_lock (fun () ->
+      In_thread.run (fun () ->
+        try Ok (Core.Std.Lock_file.Nfs.unlock_exn (lock_filename t))
+        with exn -> Or_error.of_exn exn
+      )
+    )
 end
 
 include State

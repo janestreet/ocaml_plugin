@@ -8,3 +8,10 @@ CAMLprim value ocaml_plugin_archive (value unit __attribute__ ((unused)))
 
   return(caml_copy_string(v));
 }
+
+CAMLprim value ocaml_plugin_archive_digest (value unit __attribute__ ((unused)))
+{
+  char v[] = "dummy";
+
+  return(caml_copy_string(v));
+}

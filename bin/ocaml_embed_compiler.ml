@@ -81,8 +81,10 @@ let escape =
   fun c -> a.(Char.to_int c)
 
 let generate_c_file target tar =
+  let module Digest = Plugin_cache.Digest in
   Monitor.try_with ~here:_here_ (fun () ->
     Reader.file_contents tar >>= fun str ->
+    let str_digest = Digest.to_string (Digest.string str) in
     Writer.open_file target >>= fun w ->
     Writer.write w (String.concat ~sep:"\n" [
       "#include <string.h>";
@@ -90,23 +92,30 @@ let generate_c_file target tar =
       "#include <caml/memory.h>";
       "#include <caml/alloc.h>";
       "";
-      "static char s[] = \"";
     ]);
-    for i = 0 to String.length str - 1 do
-      let c = str.[i] in
-      Writer.write w (escape c)
-    done;
-    Writer.write w (String.concat ~sep:"\n" [
-      "\";";
-      "";
-      "CAMLprim value ocaml_plugin_archive (value unit __attribute__ ((unused)))";
-      "{";
-      sprintf "  value v = caml_alloc_string(%d);" (String.length str);
-      sprintf "  memcpy(String_val(v), s, %d);" (String.length str);
-      "  return(v);";
-      "}";
-      ""; (* error from gcc on centos5 if there is no newline at the end of file *)
-    ]);
+    let write_static ~varname ~contents:str =
+      Writer.write w (sprintf "static char %s[] = \"" varname);
+      for i = 0 to String.length str - 1 do
+        let c = str.[i] in
+        Writer.write w (escape c)
+      done;
+      Writer.write w "\";\n";
+    in
+    let define fctname ~varname ~contents:str =
+      Writer.write w (String.concat ~sep:"\n" [
+        "CAMLprim value " ^ fctname ^ " (value unit __attribute__ ((unused)))";
+        "{";
+        sprintf "  value v = caml_alloc_string(%d);" (String.length str);
+        sprintf "  memcpy(String_val(v), %s, %d);" varname (String.length str);
+        "  return(v);";
+        "}";
+        ""; (* error from gcc on centos5 if there is no newline at the end of file *)
+      ]);
+    in
+    write_static  ~varname:"s"        ~contents:str;
+    write_static  ~varname:"s_digest" ~contents:str_digest;
+    define "ocaml_plugin_archive"        ~varname:"s"        ~contents:str;
+    define "ocaml_plugin_archive_digest" ~varname:"s_digest" ~contents:str_digest;
     Writer.close w
   )
 

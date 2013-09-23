@@ -2,19 +2,6 @@ open Core.Std
 open Async.Std
 
 
-module Deferred : sig
-  module Or_error : sig
-    type 'a t = 'a Deferred.Or_error.t
-    val try_with :
-      ?extract_exn:bool -> ?name:string -> (unit -> 'a Deferred.t)
-      -> 'a Deferred.Or_error.t
-
-    val try_with_join :
-      ?extract_exn:bool -> ?name:string -> (unit -> 'a Deferred.Or_error.t)
-      -> 'a Deferred.Or_error.t
-  end
-end
-
 (*
   Global properties regarding bash sys calls. Echo would print the command before running
   them, and verbose would print the full output of the command.

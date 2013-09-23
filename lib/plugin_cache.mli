@@ -62,3 +62,24 @@ val find : t -> Sources.t -> Plugin.t option
 val add : t -> Sources.t -> Plugin_uuid.t -> filename -> unit Deferred.Or_error.t
 
 val old_cache_with_new_exec : t -> bool
+
+(** release this plugin cache lock *)
+val clean : t -> unit Deferred.Or_error.t
+
+(**
+   Build_info and Digest utils
+   Exported to be used in some other part of ocaml_plugin
+*)
+
+module Build_info : sig
+  type t with sexp
+  val equal : t -> t -> bool
+  val current : t
+end
+
+module Digest : sig
+  type t with compare, sexp
+  include Stringable with type t := t
+  val file : filename -> t Deferred.Or_error.t
+  val string : string -> t
+end

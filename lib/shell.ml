@@ -1,22 +1,6 @@
 open Core.Std
 open Async.Std
 
-module Deferred = struct
-  let return = Deferred.return
-  module Or_error = struct
-    type 'a t = 'a Deferred.Or_error.t
-    let try_with ?(extract_exn=false) ?name f =
-      Deferred.map (Monitor.try_with ?name f) ~f:(function
-      | Error exn ->
-        let exn = if extract_exn then Monitor.extract_exn exn else exn in
-        Error (Error.of_exn exn)
-      | Ok _ as ok -> ok)
-
-    let try_with_join ?extract_exn ?name f =
-      Deferred.map (try_with ?extract_exn ?name f) ~f:Or_error.join
-  end
-end
-
 let permission_exe = 0o700
 
 let echo = ref false

@@ -28,18 +28,20 @@ let () =
       else
         None
     in
-    Ocaml_compiler.create ?use_cache () >>= function
+    let persistent_archive_dirpath =
+      if Array.length Sys.argv > 2 then
+        Some Sys.argv.(2)
+      else None
+    in
+    Ocaml_compiler.create
+      ?use_cache
+      ?persistent_archive_dirpath
+      () >>= function
     | Error e ->
       Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
       Printf.eprintf "use run_standalone.exe (cf build.sh) instead\n%!";
       exit 1
     | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
-      don't_wait_for (Ocaml_compiler.read_directory ocaml_compiler >>| function
-      | Ok directory ->
-        Printf.eprintf "compilation happens in %S\n%!" directory
-      | Error exn ->
-        Printf.eprintf "Cannot initialize loader: %s" (Error.to_string_hum exn)
-      );
       let loader = Ocaml_compiler.loader ocaml_compiler in
       let stdin = Lazy.force Reader.stdin in
       let rec loop () =

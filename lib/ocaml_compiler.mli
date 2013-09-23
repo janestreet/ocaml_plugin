@@ -11,19 +11,26 @@ open Core.Std
 open Async.Std
 
 (**
-   mutable type to get the compiler and the cmi using the objcopy section
-   which must have been embedded in the executable by 'ocaml-embed-compiler'
-*)
+   mutable type to get the compiler and the cmi which must have been embedded in
+   the executable *)
 type t
-
-(**
-   The convention over the name of pervasives inside the archive
-*)
-val pervasives : string
 
 val config_file : string
 
-type 'a create_arguments = 'a Ocaml_dynloader.create_arguments
+type 'a create_arguments = (
+  ?persistent_archive_dirpath:string
+  (**
+     Keep the extracted archive in some persistent location to avoid paying the cost of
+     extraction each time a file needs to be compiled.
+     The location passed will not be cleaned at the end of the execution of the
+     program. The only guarantee given there is that it is never going to grow more than
+     the size of the embedded archive.
+     If the persistent location contains a extracted version that is older than the
+     current executable, the directory is cleaned up and the archive is extracted again.
+  *)
+
+  -> 'a
+) Ocaml_dynloader.create_arguments
 
 (**
    This is a special utilisation of the Generic Loader.
@@ -50,35 +57,18 @@ val create : (
 
 (**
    Call create, do something with the compiler, and then take care of calling clean.
+   In case an exception or a shutdown happen and f never returns, an attempt to clean the
+   compiler is still done via an at_shutdown execution.
 *)
 val with_compiler : (
-  unit -> f:(t -> 'a Deferred.Or_error.t) -> 'a Deferred.Or_error.t
+  f:(t -> 'a Deferred.Or_error.t)
+  -> unit -> 'a Deferred.Or_error.t
 ) create_arguments
 
 (**
    Get the loader using this compiler and these cmi
 *)
 val loader : t -> Ocaml_dynloader.t
-
-(**
-   This forces the initialization setup (tempdir, extraction)
-*)
-val force : t -> unit Deferred.Or_error.t
-
-(**
-   If for some reason you need to know where everything happens.
-   This directory is an absolute pathname.
-   This forces the initialization setup (tempdir, extraction).
-   see also lazy_directory.
-*)
-val directory : t -> string Deferred.Or_error.t
-
-(**
-   This deferred gets computed once the setup has been achieved.
-   Useful for logging/debugging purpose. Beware, if no compilation happen,
-   this deferred may never get computed.
-*)
-val read_directory : t -> string Deferred.Or_error.t
 
 (**
    This will delete the temporary directory created, and remove all

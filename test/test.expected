@@ -77,3 +77,10 @@ checking run_plugin_toplevel parameter
 loaded ml in async by default
 loaded ml outside of async if requested
 
+checking persistent archive
+loaded ml correctly
+use existing compiler from persistent location
+loaded ml correctly
+refresh existing compiler in the persistent location
+loaded ml correctly
+

@@ -3,10 +3,6 @@
 # redirecting stderr to stdout
 exec 2>&1
 
-# not awesome is the same test is running in parallel in an other repo
-# could go inside and use the debug info maybe?
-tmpdirs_before="$(echo tmp_dir/ocaml_plugin*)"
-
 function cleanup {
     rm -rf cache tmp_dir test{,1,2,3}.ml{,i} invalid-name.ml Test.ml{,i}
 }
@@ -331,10 +327,44 @@ else
 fi
 echo
 
-
-# TODO
-# echo 'check what happens on ocaml version change'
-# echo 'check what happens on build info change'
-# have a test that loads a lot of files (in parallel, even)
-# and see if something leaks or blows up
-
+echo 'checking persistent archive'
+rm -f test1.mli
+echo 'let () = print_endline "persistent"' > test1.ml
+output="$(./plugin_loader.exe --persistent-archive test1.ml 2>&1)"
+if [ "$output" = 'persistent' ]; then
+    echo 'loaded ml correctly'
+else
+    echo "broken test: $output"
+fi
+function ocamlopt_stat {
+    stat -c %z cache/compiler/ocamlopt.opt
+}
+compiler_stat=$(ocamlopt_stat)
+output="$(./plugin_loader.exe --persistent-archive test1.ml 2>&1)"
+compiler_stat2=$(ocamlopt_stat)
+if [ "$compiler_stat" = "$compiler_stat2" ]; then
+    echo 'use existing compiler from persistent location'
+else
+    echo "broken test: $compiler_stat $compiler_stat2"
+    ls -l cache/compiler
+fi
+if [ "$output" = 'persistent' ]; then
+    echo 'loaded ml correctly'
+else
+    echo "broken test: $output"
+fi
+sed -i -e 's/archive_digest [^)]*/archive_digest fake-digest/' cache/compiler/archive-info.sexp
+output="$(./plugin_loader.exe --persistent-archive test1.ml 2>&1)"
+compiler_stat3=$(ocamlopt_stat)
+if [ "$compiler_stat2" != "$compiler_stat3" ]; then
+    echo 'refresh existing compiler in the persistent location'
+else
+    echo "broken test: $compiler_stat2 $compiler_stat3"
+    ls -l cache/compiler
+fi
+if [ "$output" = 'persistent' ]; then
+    echo 'loaded ml correctly'
+else
+    echo "broken test: $output"
+fi
+echo

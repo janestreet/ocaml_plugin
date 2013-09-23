@@ -57,7 +57,7 @@ module Compilation_config = struct
     } with sexp_of
 
     let create () =
-      Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         let hostname = Unix.gethostname () in
         let pid = Unix.getpid () in
         let build_info = Params.build_info in
@@ -79,9 +79,9 @@ module Compilation_config = struct
 
     let save info_file =
       Lazy_deferred.force_exn get >>=? fun info ->
-        Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-          Writer.save_sexp ~hum:true info_file info
-        )
+      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+        Writer.save_sexp ~hum:true info_file info
+      )
   end
 
   let lazy_create ~initialize_compilation_callback ~in_dir =
@@ -178,7 +178,7 @@ let create
     } in
   Deferred.return (Ok t)
 
-let clean t =
+let clean_compilation_directory t =
   if not (Lazy_deferred.is_forced t.compilation_config) then return (Ok ())
   else begin
     Lazy_deferred.force_exn t.compilation_config >>= function
@@ -189,9 +189,31 @@ let clean t =
          fine. *)
       return (Ok ())
     | Ok (directory, _) ->
-      Shell.rm ~r:() ~f:() [directory] >>| fun result ->
-      t.cleaned <- true;
-      result
+      Shell.rm ~r:() ~f:() [directory]
+  end
+
+let clean_plugin_cache t =
+  match t.cache with
+  | None -> return (Ok ())
+  | Some cache ->
+    if not (Lazy_deferred.is_forced cache) then return (Ok ())
+    else begin
+      Lazy_deferred.force_exn cache >>= function
+      | Error _ -> return (Ok ())
+      | Ok cache ->
+        Plugin_cache.clean cache
+    end
+
+let clean t =
+  if t.cleaned then return (Ok ())
+  else begin
+    t.cleaned <- true;
+    clean_compilation_directory t >>= fun r1 ->
+    clean_plugin_cache t >>| fun r2 ->
+    Or_error.combine_errors_unit [
+      r1;
+      r2;
+    ]
   end
 
 module Univ_constr = struct
@@ -327,7 +349,7 @@ end = struct
       ;
       target
     in
-    Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
 
   (* Dynlink has the following not really wanted property: dynlinking a file with a given
@@ -351,7 +373,7 @@ end = struct
 
   let dynlink ?export cmxs_filename =
     let fct () = blocking_dynlink ?export cmxs_filename in
-    Shell.Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
 
   let compile_and_load_file ~working_dir t ?export ~basename =
     let basename_without_ext =
@@ -369,7 +391,9 @@ end = struct
     let pp_args = match t.pa_files with
       | [] -> []
       | cmxs ->
-        [ "-pp" ; String.concat (t.camlp4o_opt::cmxs) ~sep:" " ]
+        [ "-pp" ;
+          String.concat (t.camlp4o_opt :: include_directories @ cmxs) ~sep:" "
+        ]
     in
     let create_cmx_args =
       pp_args @ include_directories @ t.cmx_flags @ [
