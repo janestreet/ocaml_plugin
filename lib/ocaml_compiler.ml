@@ -69,7 +69,10 @@ let clean t =
    by calling the omakeroot function OCamlPluginEmbeddedArchive.
    Calling this function takes 10 or 20ms => I won't bother avoiding the copying
    from C to caml. *)
-external archive                : unit -> string = "ocaml_plugin_archive"
+external archive : unit -> string = "ocaml_plugin_archive"
+let archive () =
+  let str = archive () in
+  if str = "dummy" then None else Some str
 external archive_digest_binding : unit -> string = "ocaml_plugin_archive_digest"
 let archive_digest () =
   Plugin_cache.Digest.of_string (archive_digest_binding ())
@@ -81,12 +84,19 @@ let () =
     (* This is a way of extracting the archive from the executable. It can be used like
        this: OCAML_PLUGIN_DUMP_ARCHIVE= ./run.exe | tar -xz
        We exit to avoid running any side effects that could be done later at toplevel. *)
-    Printf.printf "%s%!" (archive ());
+    Printf.eprintf "archive digest: %s\n%!"
+      (Plugin_cache.Digest.to_string (archive_digest ()));
+    begin match archive () with
+    | None -> Printf.printf "No archive\n%!"
+    | Some str -> Printf.printf "%s%!" str;
+    end;
     Core.Caml.Pervasives.exit 0
 
 let save_archive_to destination =
   Deferred.Or_error.try_with (fun () ->
-    Writer.save destination ~contents:(archive ())
+    match archive () with
+    | None -> failwith "There is no embedded compiler in the current executable"
+    | Some contents -> Writer.save destination ~contents
   )
 
 exception Mandatory_file_not_found of string * string list with sexp

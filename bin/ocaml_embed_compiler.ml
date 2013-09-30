@@ -28,6 +28,11 @@ struct
             ~doc:"<file.c> set the name of the c file to be created"
             (required file))
 
+  let wrap_symbol =
+    Command.Spec.(flag "-wrap-symbol"
+            ~doc:" generate __wrap_ocaml_plugin_archive instead of ocaml_plugin_archive"
+            no_arg)
+
   let verbose =
     Command.Spec.(flag "-verbose"
             ~doc:" be more verbose"
@@ -43,6 +48,7 @@ struct
       +> camlp4o_opt
       +> pa_files
       +> target
+      +> wrap_symbol
       +> verbose
       +> files
     )
@@ -80,7 +86,7 @@ let escape =
   let a = Array.init ~f:(Printf.sprintf "\\x%02x") 256 in
   fun c -> a.(Char.to_int c)
 
-let generate_c_file target tar =
+let generate_c_file wrap_symbol target tar =
   let module Digest = Plugin_cache.Digest in
   Monitor.try_with ~here:_here_ (fun () ->
     Reader.file_contents tar >>= fun str ->
@@ -101,9 +107,10 @@ let generate_c_file target tar =
       done;
       Writer.write w "\";\n";
     in
+    let wrap = if wrap_symbol then "__wrap_" else "" in
     let define fctname ~varname ~contents:str =
       Writer.write w (String.concat ~sep:"\n" [
-        "CAMLprim value " ^ fctname ^ " (value unit __attribute__ ((unused)))";
+        "CAMLprim value " ^ wrap ^ fctname ^ " (value unit __attribute__ ((unused)))";
         "{";
         sprintf "  value v = caml_alloc_string(%d);" (String.length str);
         sprintf "  memcpy(String_val(v), %s, %d);" varname (String.length str);
@@ -119,7 +126,7 @@ let generate_c_file target tar =
     Writer.close w
   )
 
-let main ocamlopt_opt camlp4o_opt pa_files target verbose files () =
+let main ocamlopt_opt camlp4o_opt pa_files target wrap_symbol verbose files () =
   let _set_defaults_scope =
     Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
   in
@@ -171,7 +178,7 @@ let main ocamlopt_opt camlp4o_opt pa_files target verbose files () =
   let tar = "a.tgz" in
   Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files tar >>=! fun () ->
   let tar = tmpdir ^/ tar in
-  generate_c_file target tar
+  generate_c_file wrap_symbol target tar
   >>= function
   | Error exn ->
     Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ]

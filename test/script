@@ -332,7 +332,12 @@ rm -f test1.mli
 echo 'let () = print_endline "persistent"' > test1.ml
 output="$(./plugin_loader.exe --persistent-archive test1.ml 2>&1)"
 if [ "$output" = 'persistent' ]; then
-    echo 'loaded ml correctly'
+    if grep -q 'archive_digest dummy' cache/compiler/archive-info.sexp; then
+        echo "The archive-info.sexp looks wrong:"
+        cat cache/compiler/archive-info.sexp
+    else
+        echo 'loaded ml correctly'
+    fi
 else
     echo "broken test: $output"
 fi
