@@ -50,10 +50,7 @@ let clean t =
   | Archive_lock.Cleaned -> Deferred.Or_error.ok_unit
   | Archive_lock.Cleaning def -> def
   | Archive_lock.Locked lock_filename ->
-    let clean =
-      In_thread.run (fun () ->
-        Or_error.try_with (fun () -> Core.Std.Lock_file.Nfs.unlock_exn lock_filename))
-    in
+    let clean = Lock_file.Nfs.unlock lock_filename in
     t.archive_lock.contents <- Archive_lock.Cleaning clean;
     clean >>| fun res ->
     t.archive_lock.contents <- Archive_lock.Cleaned;
@@ -177,8 +174,6 @@ end = struct
       Digest.compare (archive_digest ()) t.archive_digest = 0
   end
 
-  exception Cannot_take_plugin_archive_lock of string with sexp
-
   let extract_throttle = Throttle.Sequencer.create ~continue_on_error:true ()
 
   let extract ~archive_lock ~persistent compiler_dir =
@@ -186,15 +181,8 @@ end = struct
       if_ persistent (fun () ->
         let lock_filename = compiler_dir ^ ".lock" in
         Shell.mkdir_p ~perm:0o755 (Filename.dirname lock_filename) >>=? fun () ->
-        (In_thread.run (fun () ->
-          try Core.Std.Lock_file.Nfs.create lock_filename with _ -> false
-         ) >>= function
-        | true ->
-          archive_lock := Archive_lock.Locked lock_filename;
-          Deferred.Or_error.ok_unit
-        | false ->
-          Deferred.Or_error.of_exn (Cannot_take_plugin_archive_lock lock_filename)
-        ) >>=? fun () ->
+        Lock_file.Nfs.create lock_filename >>=? fun () ->
+        archive_lock := Archive_lock.Locked lock_filename;
         (* Beware of race condition in here. If we are killed in the middle of rm -rf, but
            the info file has not been deleted, then the extracted archive would be
            corrupted because it doesn't match the info file anymore.  This is why we first

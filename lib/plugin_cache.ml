@@ -226,8 +226,6 @@ module State = struct
   let save_info t =
     Info.save ~dir:(Config.dir t.config) (info t)
 
-  exception Cannot_take_plugin_cache_lock of string with sexp
-
   let lock_filename t =
     let config_dir = Config.dir t.config in
     config_dir ^/ Info.cache_dir ^ ".lock"
@@ -238,14 +236,9 @@ module State = struct
     if t.has_write_lock then Deferred.Or_error.return ()
     else
       let lock_filename = lock_filename t in
-      In_thread.run (fun () ->
-        try Core.Std.Lock_file.Nfs.create lock_filename with _ -> false
-      ) >>| function
-      | true ->
-        t.has_write_lock <- true;
-        Ok ()
-      | false ->
-        Or_error.of_exn (Cannot_take_plugin_cache_lock lock_filename)
+      Lock_file.Nfs.create lock_filename >>|? fun () ->
+      t.has_write_lock <- true;
+  ;;
 
   let load_info t =
     let config_dir = Config.dir t.config in
@@ -411,12 +404,7 @@ module State = struct
   let clean t =
     let had_lock = t.has_write_lock in
     t.has_write_lock <- false;
-    if_ had_lock (fun () ->
-      In_thread.run (fun () ->
-        try Ok (Core.Std.Lock_file.Nfs.unlock_exn (lock_filename t))
-        with exn -> Or_error.of_exn exn
-      )
-    )
+    if_ had_lock (fun () -> Lock_file.Nfs.unlock (lock_filename t))
 end
 
 include State

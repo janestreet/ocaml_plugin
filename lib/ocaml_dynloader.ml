@@ -217,9 +217,9 @@ let clean t =
   end
 
 module Univ_constr = struct
-  type 'a t = 'a Univ.Constr.t
+  type 'a t = 'a Type_equal.Id.t
   let name = "Ocaml_plugin.Std.Ocaml_dynloader.Univ_constr.t"
-  let create () = Univ.Constr.create name sexp_of_opaque
+  let create () = Type_equal.Id.create ~name sexp_of_opaque
 end
 
 module type Module_type =

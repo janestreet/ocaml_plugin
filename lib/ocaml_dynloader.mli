@@ -172,7 +172,7 @@ val clean : t -> unit Deferred.Or_error.t
 exception Usage_of_cleaned_dynloader with sexp
 
 module Univ_constr : sig
-  type 'a t = 'a Univ.Constr.t
+  type 'a t = 'a Type_equal.Id.t
   val create : unit -> 'a t
 end
 
