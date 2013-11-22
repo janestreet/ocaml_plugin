@@ -1,0 +1,21 @@
+# OASIS_START
+# DO NOT EDIT (digest: 6da8dd7e6c43d2646f31fa5924536795)
+version = "109.52.00"
+description = "Automatically build and load OCaml source files"
+requires = "dynlink async comparelib bin_prot fieldslib threads"
+archive(byte) = "ocaml_plugin.cma"
+archive(byte, plugin) = "ocaml_plugin.cma"
+archive(native) = "ocaml_plugin.cmxa"
+archive(native, plugin) = "ocaml_plugin.cmxs"
+exists_if = "ocaml_plugin.cma"
+package "fake" (
+ version = "109.52.00"
+ description = "Automatically build and load OCaml source files"
+ archive(byte) = "ocaml_plugin_fake_archive.cma"
+ archive(byte, plugin) = "ocaml_plugin_fake_archive.cma"
+ archive(native) = "ocaml_plugin_fake_archive.cmxa"
+ archive(native, plugin) = "ocaml_plugin_fake_archive.cmxs"
+ exists_if = "ocaml_plugin_fake_archive.cma"
+)
+# OASIS_STOP
+
