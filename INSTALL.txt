@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: ab84c04dd59e980d0c5c5fbc0b9287e0) *)
+(* DO NOT EDIT (digest: 7a0290ff68d7370238cd2f169acf07e9) *)
 This is the INSTALL file for the ocaml_plugin distribution.
 
 This package uses OASIS to generate its build system. See section OASIS for
@@ -32,7 +32,7 @@ Installing
 Uninstalling
 ============
 
-1. Go to the root of the package 
+1. Go to the root of the package
 2. Run 'ocaml setup.ml -uninstall'
 
 OASIS

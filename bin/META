@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: e44f2880a28b48cd1f31874d3ee9f6b9)
-version = "109.53.00"
+# DO NOT EDIT (digest: 9abaa3202809fd3481a780e83ad4e9bf)
+version = "109.53.01"
 description = "Automatically build and load OCaml source files"
 requires = "ocaml_plugin type_conv sexplib"
 archive(byte) = "ocaml_plugin_sample_archive.cma"
