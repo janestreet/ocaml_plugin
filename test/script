@@ -140,6 +140,49 @@ else
 fi
 echo
 
+echo 'using lazy in a plugin'
+cat > test.ml <<EOF
+let lazy x = lazy (print_endline "using lazy is fine"; 1+41)
+let () = assert (x = 42)
+EOF
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
+if grep -q 'using lazy is fine' <<< "$output"; then
+    echo 'using lazy is fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'using rec modules in a plugin'
+cat > test.ml <<EOF
+module rec A : sig end = struct
+ let () = print_endline "rec modules"
+end and B : sig end = struct
+end
+EOF
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
+if grep -q 'rec modules' <<< "$output"; then
+    echo 'using rec modules is fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'using objects in a plugin'
+cat > test.ml <<EOF
+let o = object
+   method print = print_string "objects ftw"
+end
+let () = o#print
+EOF
+output="$(./plugin_loader.exe ./test.ml 2>&1)"
+if grep -q 'objects ftw' <<< "$output"; then
+    echo 'using objects is fine'
+else
+    echo "broken test: $output"
+fi
+echo
+
 echo 'loading several ml files'
 echo 'let x = Test2.x ^ "-middle"' > test1.ml
 echo 'let x = "first"' > test2.ml

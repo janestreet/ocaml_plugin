@@ -34,6 +34,15 @@ perfect
 Loading ml that blows up at toplevel
 failed fine
 
+using lazy in a plugin
+using lazy is fine
+
+using rec modules in a plugin
+using rec modules is fine
+
+using objects in a plugin
+using objects is fine
+
 loading several ml files
 loaded in the right order and with the right scope
 
