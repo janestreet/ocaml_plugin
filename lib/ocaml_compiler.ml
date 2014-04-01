@@ -6,6 +6,7 @@ let tar_id = "dynlink.tgz"
 
 let ocamlopt_opt = Ocaml_dynloader.ocamlopt_opt
 let camlp4o_opt = Ocaml_dynloader.camlp4o_opt
+let ocamldep_opt = Ocaml_dynloader.ocamldep_opt
 
 let pervasives = "pervasives.cmi"
 let config_file = "config.sexp"
@@ -252,6 +253,7 @@ let create
   in
   let ocamlopt_opt = in_compiler_dir ocamlopt_opt in
   let camlp4o_opt  = in_compiler_dir camlp4o_opt in
+  let ocamldep_opt = in_compiler_dir ocamldep_opt in
   let nostdlib flags = "-nostdlib" :: Option.value ~default:[] flags in
   let cmx_flags = nostdlib cmx_flags in
   let cmxs_flags = nostdlib cmxs_flags in
@@ -268,6 +270,7 @@ let create
     ~initialize_compilation_callback
     ~ocamlopt_opt
     ~camlp4o_opt
+    ~ocamldep_opt
     () >>=? fun loader ->
   let compiler = {
     loader;

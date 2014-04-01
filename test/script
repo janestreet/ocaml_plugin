@@ -4,7 +4,7 @@
 exec 2>&1
 
 function cleanup {
-    rm -rf cache tmp_dir test{,1,2,3}.ml{,i} invalid-name.ml Test.ml{,i}
+    rm -rf cache tmp_dir readonly {t,T}est{,1,2,3}.ml{,i} invalid-name.ml
 }
 trap 'cleanup' EXIT INT QUIT
 cleanup
@@ -195,6 +195,24 @@ else
 fi
 echo
 
+echo 'loading several ml files with ocamldep in a read-only folder'
+mkdir -p readonly
+echo 'let () = print_endline "this should not be loaded"' > readonly/test.ml
+echo 'let () "this syntax error shall not be a problem"' > readonly/test_with_typo.ml
+echo 'open Core.Std;; let x = Test2.x ^ (sprintf !"%{sexp: string}" "-middle")' > readonly/test1.ml
+echo 'let x = "first"' > readonly/test2.ml
+echo 'let x = Test1.x ^ "-last";; print_endline x' > readonly/test3.ml
+chmod -R -w readonly
+output="$(VERBOSE= ./plugin_loader.exe --find-dependencies readonly/test3.ml 2>&1)"
+expected=$'Loaded test2.ml test1.ml test3.ml\nfirst-middle-last'
+if [ "$output" = "$expected" ]; then
+    echo 'loaded with ocamldep in the right order and with the right scope'
+else
+    echo "broken test: $output"
+fi
+chmod -R +w readonly
+echo
+
 echo 'loading file with a wrong name'
 echo > invalid-name.ml
 output="$(./plugin_loader.exe invalid-name.ml 2>&1)"
@@ -237,12 +255,27 @@ fi
 echo
 
 echo 'loading ml and mli from different dirs'
+mkdir -p tmp_dir
 echo 'let x = 2' > test.ml
 echo 'val x : int' > test.mli
 echo 'val x : string' > tmp_dir/Test.mli
 output="$(./plugin_loader.exe test.ml tmp_dir/Test.mli 2>&1)"
 if grep -q 'Signature mismatch' <<< "$output"; then
     echo type error as expected
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading ml and mli from different dirs'
+mkdir -p tmp_dir
+echo 'let x = 2' > test.ml
+echo 'let () = print_endline "different dirs ok"' >> test.ml
+rm -f test.mli
+echo 'val x : int' > tmp_dir/Test.mli
+output="$(./plugin_loader.exe test.ml tmp_dir/Test.mli 2>&1)"
+if grep -q 'different dirs ok' <<< "$output"; then
+    echo loaded as expected
 else
     echo "broken test: $output"
 fi
@@ -412,6 +445,21 @@ else
 fi
 if [ "$output" = 'persistent' ]; then
     echo 'loaded ml correctly'
+else
+    echo "broken test: $output"
+fi
+echo
+
+echo 'loading several ml files with different cases and using ocamldep'
+rm -f [tT]est{,1}.ml{,i}
+echo 'let y = "foo"' > Test.ml
+echo 'val y : string' > Test.mli
+echo 'print_endline Test.y;; let x = Test.y' > test1.ml
+echo 'val x : string' > test1.mli
+output="$(VERBOSE= ./plugin_loader.exe --find-dependencies test1.ml 2>&1)"
+expected=$'Loaded Test.mli Test.ml test1.mli test1.ml\nfoo'
+if [ "$output" = "$expected" ]; then
+    echo 'ok'
 else
     echo "broken test: $output"
 fi

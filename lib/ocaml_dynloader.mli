@@ -28,10 +28,11 @@ exception Is_not_native with sexp
 
 (**
    The convention over the name of the executable inside the archive.
-   Both are native executable (.opt)
+   All are native executables (.opt)
 *)
 val ocamlopt_opt : string
 val camlp4o_opt  : string
+val ocamldep_opt : string
 
 type 'a create_arguments =
   ?in_dir:string
@@ -127,19 +128,14 @@ val create : (
   *)
 
   -> ?ocamlopt_opt:string
-  (**
-     Should be the same ocamlopt executable than the one used to compile the executable
-     using this library and the needed cmi (or at least the same version).
-     If this is not specified, will assume that the correct 'ocamlopt.opt' is present in
-     the path of the current executable, which is most likely a naive hope.
-  *)
-
   -> ?camlp4o_opt:string
+  -> ?ocamldep_opt:string
   (**
-     Should be the same camlp4 executable than the one used to compile the executable
-     using this library and the needed cmxs (or at least the same version).
-     If this is not specified, will assume that the correct 'camlp4o.opt' is present in
-     the path of the current executable, which is most likely a naive hope.
+     ocamlopt, camlp4 and ocamldep should be for the same version of ocaml as the current
+     executable and the provided or embedded ocaml files (interfaces, preprocessors).
+     If this is not specified, ocaml_plugin will assume that the correct ocamlopt.opt,
+     camlp4.opt or ocamldep.opt' are present in the path of the current executable, which
+     is most likely a naive hope.
   *)
 
   -> ?pa_files:string list
@@ -229,6 +225,12 @@ sig
     -the value [univ_constr] and its representation [univ_constr_repr] should match.
   *)
 end
+
+(** [find_dependencies t file] uses ocamldep to compute the list of .ml and .mli files
+    that [file] depends on transitively, which you can then pass to [load_ocaml_src_files].
+    [file] must be an .ml file, and all the files it depend on must be in the same folder.
+*)
+val find_dependencies : t -> string -> string list Deferred.Or_error.t
 
 module Make : functor (X : Module_type) -> sig
   (** Load a bunch of ocaml files source files (.ml + .mli). The last module's signature

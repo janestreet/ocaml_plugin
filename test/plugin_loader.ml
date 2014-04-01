@@ -3,20 +3,46 @@ open Async.Std
 open Ocaml_plugin.Std
 
 let run
-    ?use_cache
-    ?persistent_archive_dirpath
-    ~trigger_unused_value_warnings_despite_mli
-    ~run_plugin_toplevel
-    files =
+      ?use_cache
+      ?persistent_archive_dirpath
+      ~trigger_unused_value_warnings_despite_mli
+      ~run_plugin_toplevel
+      ~find_dependencies
+      files =
   Sys.getcwd () >>= fun cwd ->
   let in_dir = Filename.concat cwd "tmp_dir" in
-  Ocaml_compiler.load_ocaml_src_files
-    ~in_dir
-    ~trigger_unused_value_warnings_despite_mli
-    ~run_plugin_toplevel
-    ?use_cache
-    ?persistent_archive_dirpath
-    files >>= function
+  (if find_dependencies
+   then match files with
+     | [file] ->
+       Ocaml_compiler.with_compiler
+         ~in_dir
+         ~trigger_unused_value_warnings_despite_mli
+         ~run_plugin_toplevel
+         ?use_cache
+         ?persistent_archive_dirpath
+         ~f:(fun compiler ->
+           let loader = Ocaml_compiler.loader compiler in
+           Ocaml_dynloader.find_dependencies loader file >>=? fun files ->
+           begin match Sys.getenv "VERBOSE" with
+           | None -> ()
+           | Some _ ->
+             Printf.printf "Loaded %s\n"
+               (String.concat (List.map files ~f:Filename.basename) ~sep:" ")
+           end;
+           Ocaml_dynloader.load_ocaml_src_files loader files
+         )
+         ()
+     | _ ->
+       failwithf "When --find-dependencies is specified, only one file should be given" ()
+   else
+     Ocaml_compiler.load_ocaml_src_files
+       ~in_dir
+       ~trigger_unused_value_warnings_despite_mli
+       ~run_plugin_toplevel
+       ?use_cache
+       ?persistent_archive_dirpath
+       files)
+  >>= function
   | Ok () -> Deferred.unit
   | Error e ->
     prerr_endline (Error.to_string_hum e);
@@ -58,6 +84,10 @@ module Flags = struct
       (flag "--toplevel-outside-of-async" no_arg
          ~doc:" execute plugin's toplevel outside of async")
 
+  let find_dependencies () =
+    flag "--find-dependencies" no_arg
+      ~doc:" use ocamldep to generate dependencies"
+
   let anon_files () =
     anon (sequence ("<ocaml-file>" %: file))
 end
@@ -71,12 +101,14 @@ let command =
     +> Flags.persistent_archive ()
     +> Flags.trigger_unused_value_warnings_despite_mli ()
     +> Flags.run_plugin_toplevel ()
+    +> Flags.find_dependencies ()
     +> Flags.anon_files ()
   )) (fun
     use_cache
     persistent_archive_dirpath
     trigger_unused_value_warnings_despite_mli
     run_plugin_toplevel
+    find_dependencies
     files
     ()
   ->
@@ -86,6 +118,7 @@ let command =
         ?persistent_archive_dirpath
         ~trigger_unused_value_warnings_despite_mli
         ~run_plugin_toplevel
+        ~find_dependencies
     ) >>= fun () ->
     return (Shutdown.shutdown 0)
   )

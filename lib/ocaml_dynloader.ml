@@ -1,3 +1,4 @@
+
 open Core.Std
 open Async.Std
 
@@ -22,6 +23,7 @@ type t = {
   include_directories : string list;
   ocamlopt_opt : string;
   camlp4o_opt : string;
+  ocamldep_opt : string;
   pa_files : string list; (* Usually contains explicit provided preprocessors. The ones
                              from the config will be added right before generating the
                              command lines *)
@@ -36,6 +38,7 @@ let next_filename () =
 
 let ocamlopt_opt = "ocamlopt.opt"
 let camlp4o_opt = "camlp4o.opt"
+let ocamldep_opt = "ocamldep.opt"
 
 module Compilation_config = struct
 
@@ -141,6 +144,7 @@ let create
     ?initialize_compilation_callback
     ?(ocamlopt_opt = ocamlopt_opt)
     ?(camlp4o_opt = camlp4o_opt)
+    ?(ocamldep_opt = ocamldep_opt)
     ?(pa_files = [])
     ()
     =
@@ -172,6 +176,7 @@ let create
       include_directories;
       ocamlopt_opt;
       camlp4o_opt;
+      ocamldep_opt;
       pa_files;
       cache;
       run_plugin_toplevel;
@@ -418,6 +423,59 @@ end = struct
 end
 
 exception Usage_of_cleaned_dynloader with sexp
+
+let find_dependencies t filename =
+  if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
+    (if Filename.check_suffix filename ".ml"
+     then return (Ok ())
+     else return (Or_error.errorf "Ocaml_dynloader.find_dependencies: \
+                                   argument %S is not an ml file" filename)
+    ) >>=? fun () ->
+    Lazy_deferred.force_exn t.compilation_config >>=? fun (base_dir, config_opt) ->
+    let t = update_with_config t config_opt in
+    Shell.absolute_pathname filename >>=? fun filename ->
+    let working_dir = Filename.dirname filename in
+    let target = Filename.chop_extension (Filename.basename filename) in
+    let in_base_dir file =
+      (* our [working_dir] is supplied by user and is not [base_dir], and [file] is
+         relative to [base_dir] if it is not an absolute path and not an invocation to
+         something in $PATH *)
+      if not (Filename.is_absolute file) && String.mem file '/'
+      then base_dir ^/ file
+      else file
+    in
+    let pp_args = match t.pa_files with
+      | [] -> []
+      | cmxs ->
+        let include_directories =
+          let f dir = [ "-I" ; dir ] in
+          List.concat_map ~f (base_dir :: t.include_directories)
+        in
+        [ "-pp" ;
+          String.concat (in_base_dir t.camlp4o_opt :: include_directories @ cmxs) ~sep:" "
+        ]
+    in
+    (* The reason we don't copy these ml input files to base_dir is simply because we
+       don't have to. There's no gain in copying them. ocamldep with camlp4o doesn't write
+       any temp files in the working directory, so it will work also in read-only
+       locations. This invariant is checked going forward with a unit test that loads ml
+       files from a read-only folder. *)
+    Ocamldep.find_dependencies
+      ~prog:(in_base_dir t.ocamldep_opt)
+      ~args:pp_args
+      ~working_dir
+      ~target
+    >>=? fun compilation_units ->
+    (* convert the topological order of compilation units into a list of files *)
+    (Deferred.List.map compilation_units ~f:(fun compilation_unit ->
+       let ml  = working_dir ^/ (compilation_unit ^ ".ml")  in
+       let mli = ml ^ "i" in
+       Sys.file_exists mli >>| function
+       | `Yes ->  Ok [ mli; ml ]
+       | `No -> Ok [ ml ]
+       | `Unknown -> Or_error.errorf "File in unknown state: %s" mli
+     ) >>| Or_error.all)
+    >>|? List.concat
 
 let load_ocaml_src_files_plugin_uuid ~repr t filenames =
   if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else

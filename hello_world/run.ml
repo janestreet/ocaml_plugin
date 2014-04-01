@@ -57,6 +57,16 @@ let () =
           let files = List.filter_map files
             ~f:(fun s -> let s = String.strip s in if s = "" then None else Some s)
           in
+          let with_files files =
+            Plugin.load_ocaml_src_files loader files >>= function
+            | Error err ->
+              Printf.eprintf "loading failed:\n%s\n%!" (Error.to_string_hum err);
+              loop ()
+            | Ok plugin ->
+              let module M = (val plugin : Plugin_intf.S) in
+              Printf.printf "loaded plugin's message : %S\n%!" M.message;
+              loop ()
+          in
           match files with
           | [] -> loop ()
           | [ cmxs ] when String.is_suffix ~suffix:"cmxs" cmxs ->
@@ -72,16 +82,16 @@ let () =
                Printf.eprintf "dynlink failed:\n%s\n%!" str
             );
             loop ()
-          | _ -> (
-            Plugin.load_ocaml_src_files loader files >>= function
-            | Error err ->
-              Printf.eprintf "loading failed:\n%s\n%!" (Error.to_string_hum err);
-              loop ()
-            | Ok plugin ->
-              let module M = (val plugin : Plugin_intf.S) in
-              Printf.printf "loaded plugin's message : %S\n%!" M.message;
-              loop ()
-          )
+          | [ "dep" ; file ] -> begin
+              (* hack to play a bit with ocamldep *)
+              Ocaml_dynloader.find_dependencies loader file >>= function
+              | Error err ->
+                Printf.eprintf "ocamldep failed:\n%s\n%!" (Error.to_string_hum err);
+                loop ()
+              | Ok files -> with_files files
+            end
+
+          | _ -> with_files files
       in
       loop ()
   )

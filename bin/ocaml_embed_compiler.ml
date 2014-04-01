@@ -18,6 +18,11 @@ struct
             ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
             (optional file))
 
+  let ocamldep_opt =
+    Command.Spec.(flag "-ocamldep"
+            ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
+            (optional file))
+
   let pa_files =
     Command.Spec.(flag "-pa-cmxs"
             ~doc:"<file.cmxs> path to a native syntax extension plugin file"
@@ -46,6 +51,7 @@ struct
       empty
       +> ocamlopt_opt
       +> camlp4o_opt
+      +> ocamldep_opt
       +> pa_files
       +> target
       +> wrap_symbol
@@ -126,7 +132,7 @@ let generate_c_file wrap_symbol target tar =
     Writer.close w
   )
 
-let main ocamlopt_opt camlp4o_opt pa_files target wrap_symbol verbose files () =
+let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbose files () =
   let _set_defaults_scope =
     Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
   in
@@ -158,6 +164,13 @@ let main ocamlopt_opt camlp4o_opt pa_files target wrap_symbol verbose files () =
   Deferred.List.map ~how:`Parallel files ~f:copy_file >>= fun files ->
   cp ~filename:ocamlopt_opt ~basename:Ocaml_dynloader.ocamlopt_opt >>= fun () ->
   let files = Ocaml_dynloader.ocamlopt_opt :: files in
+  (match ocamldep_opt with
+   | Some ocamldep_opt ->
+     cp ~filename:ocamldep_opt ~basename:Ocaml_dynloader.ocamldep_opt >>| fun () ->
+     Ocaml_dynloader.ocamldep_opt :: files
+   | None ->
+     return files
+  ) >>= fun files ->
   (
     match camlp4o_opt with
     | None ->

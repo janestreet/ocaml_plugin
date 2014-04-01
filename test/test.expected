@@ -46,6 +46,9 @@ using objects is fine
 loading several ml files
 loaded in the right order and with the right scope
 
+loading several ml files with ocamldep in a read-only folder
+loaded with ocamldep in the right order and with the right scope
+
 loading file with a wrong name
 wrong module names are rejected
 
@@ -60,6 +63,9 @@ type error as expected
 
 loading ml and mli from different dirs
 type error as expected
+
+loading ml and mli from different dirs
+loaded as expected
 
 checking unused variables warnings 1
 loaded ml and mli without warnings
@@ -92,4 +98,7 @@ use existing compiler from persistent location
 loaded ml correctly
 refresh existing compiler in the persistent location
 loaded ml correctly
+
+loading several ml files with different cases and using ocamldep
+ok
 
