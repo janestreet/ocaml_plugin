@@ -16,6 +16,7 @@ type filename = string with sexp, compare
 
 let parallel list ~f =
   Deferred.Or_error.List.iter ~how:`Parallel list ~f
+;;
 
 module Digest : sig
   type t with compare, sexp
@@ -26,12 +27,15 @@ end = struct
   include String
 
   let to_hex fct arg = Digest.to_hex (fct arg)
+  ;;
 
   let file arg =
     let fct () = to_hex Digest.file arg in
     Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+  ;;
 
   let string arg = to_hex Digest.string arg
+  ;;
 end
 
 module Key = struct
@@ -46,8 +50,12 @@ end
 module Sources = struct
   type elt = filename * Digest.t with sexp, compare
   type t = elt list with sexp, compare
+
   let (=) a b = compare_t a b = 0
+  ;;
+
   let key t = List.map ~f:fst t
+  ;;
 end
 
 module Plugin = struct
@@ -59,6 +67,7 @@ module Plugin = struct
 
   let clean t =
     Shell.rm ~f:() [ t.cmxs_filename ]
+  ;;
 end
 
 module Info : sig
@@ -99,24 +108,32 @@ end = struct
       build_info;
       plugins;
     }
+  ;;
 
   let empty = create
     ~plugins:[]
     ()
+  ;;
+
   let is_empty t = List.is_empty t.plugins
+  ;;
 
   let cache_dir = "cmxs-cache"
   let info_file = "cache-info.sexp"
+  ;;
 
-  let cache_dir_perm = 0o755
+  let cache_dir_perm   = 0o755
   let cache_files_perm = 0o644
+  ;;
 
   let info_file_pathname ~dir = dir ^/ cache_dir ^/ info_file
+  ;;
 
   let save ~dir t =
     Deferred.Or_error.try_with ~extract_exn:true (fun () ->
       Writer.save_sexp ~perm:cache_files_perm (info_file_pathname ~dir) (sexp_of_t t)
     )
+  ;;
 
   let load ~dir =
     let pathname = info_file_pathname ~dir in
@@ -129,6 +146,7 @@ end = struct
     end
     | Error _ ->
       Deferred.return (Ok empty)
+  ;;
 end
 
 module Config = struct
@@ -174,8 +192,10 @@ module Config = struct
       try V.t_of_sexp sexp with _ -> V.V1 (V1.t_of_sexp sexp)
     in
     V.to_current v
+  ;;
 
   let sexp_of_t t = V.sexp_of_t (V.V2 t)
+  ;;
 
   let create
       ~dir
@@ -189,6 +209,7 @@ module Config = struct
       readonly;
       try_old_cache_with_new_exec;
     }
+  ;;
 end
 
 module State = struct
@@ -217,18 +238,22 @@ module State = struct
       Shell.rm ~f:() [ path ^/ filename ]
     else
       Deferred.Or_error.return ()
+  ;;
 
   let info t =
     let plugins = Key.Table.data t.table in
     let plugins = List.rev_map ~f:snd plugins in
     Info.create ~plugins ()
+  ;;
 
   let save_info t =
     Info.save ~dir:(Config.dir t.config) (info t)
+  ;;
 
   let lock_filename t =
     let config_dir = Config.dir t.config in
     config_dir ^/ Info.cache_dir ^ ".lock"
+  ;;
 
   (* this lock is taken only if we actually need to modify the info. it is cleaned by the
      Nfs lock library at exit *)
@@ -296,6 +321,7 @@ module State = struct
         Ok ()
       else
         reset_cache_if_writable info
+  ;;
 
   let create config =
     let table = Key.Table.create () in
@@ -317,6 +343,7 @@ module State = struct
     } in
     load_info state >>=? fun () ->
     Deferred.return (Ok state)
+  ;;
 
   let clean_old t =
     assert (not (Config.readonly t.config));
@@ -353,6 +380,7 @@ module State = struct
       t.old_files_deleted <- true;
       r
     end
+  ;;
 
   let find t sources =
     let key = Sources.key sources in
@@ -377,6 +405,7 @@ module State = struct
       )
     | None ->
       None
+  ;;
 
   let add t sources plugin_uuid filename =
     if_ (not (Config.readonly t.config)) (fun () ->
@@ -400,11 +429,13 @@ module State = struct
       clean_old t >>=? fun () ->
       save_info t
     )
+  ;;
 
   let clean t =
     let had_lock = t.has_write_lock in
     t.has_write_lock <- false;
     if_ had_lock (fun () -> Lock_file.Nfs.unlock (lock_filename t))
+  ;;
 end
 
 include State
@@ -414,11 +445,14 @@ let filenames_from_ml_bundles lst =
     let `ml ml, `mli opt_mli, `module_name _ = Ml_bundle.to_pathnames x in
     ml :: Option.to_list opt_mli
   in List.concat_map lst ~f
+;;
 
 let digest files =
   let files = filenames_from_ml_bundles files in
   Deferred.Or_error.List.map ~how:`Parallel files ~f:(fun file ->
     Digest.file file >>|? (fun digest -> file, digest)
   )
+;;
 
 let old_cache_with_new_exec t = t.old_cache_with_new_exec
+;;

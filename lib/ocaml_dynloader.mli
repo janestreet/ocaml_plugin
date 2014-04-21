@@ -19,6 +19,7 @@ end
    mutable type for loading ocaml modules.
 *)
 type t
+type dynloader = t
 
 (**
    Currently this library works with native code only. Called in bytecode,
@@ -165,7 +166,6 @@ val compilation_config :
    will result in an error.
 *)
 val clean : t -> unit Deferred.Or_error.t
-exception Usage_of_cleaned_dynloader with sexp
 
 module Univ_constr : sig
   type 'a t = 'a Type_equal.Id.t
@@ -232,7 +232,9 @@ end
 *)
 val find_dependencies : t -> string -> string list Deferred.Or_error.t
 
-module Make : functor (X : Module_type) -> sig
+module type S = sig
+  type t
+
   (** Load a bunch of ocaml files source files (.ml + .mli). The last module's signature
       should be compatible with the signature [X.repr]. If the type does not match, there
       will be an error during OCaml compilation. The files are copied into the compilation
@@ -243,13 +245,19 @@ module Make : functor (X : Module_type) -> sig
       the toplevel definition defined in these files are hidden
       (cannot be referenced) from other modules dynamically loaded afterwards *)
   val load_ocaml_src_files :
-    t -> string list -> X.t Deferred.Or_error.t
+    dynloader -> string list -> t Deferred.Or_error.t
+
+  (** Similar to [load_ocaml_src_files], but does not execute the plugin toplevel, just
+      checks that compilation and dynamic linking work. *)
+  val check_ocaml_src_files :
+    dynloader -> string list -> unit Deferred.Or_error.t
 end
+
+module Make : functor (X : Module_type) -> S with type t := X.t
 
 (** In some cases, we are only interested by the toplevel side effects of dynlinked
     modules. *)
-val load_ocaml_src_files :
-  t -> string list -> unit Deferred.Or_error.t
+module Side_effect : S with type t := unit
 
 (* =============================================================== *)
 (* The following section is for internal use only*)

@@ -4,6 +4,7 @@ open Ocaml_plugin.Std
 
 let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)
 let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
+;;
 
 module Flags =
 struct
@@ -12,39 +13,47 @@ struct
     Command.Spec.(flag "-cc"
             ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
             (required file))
+  ;;
 
   let camlp4o_opt =
     Command.Spec.(flag "-pp"
             ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
             (optional file))
+  ;;
 
   let ocamldep_opt =
     Command.Spec.(flag "-ocamldep"
             ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
             (optional file))
+  ;;
 
   let pa_files =
     Command.Spec.(flag "-pa-cmxs"
             ~doc:"<file.cmxs> path to a native syntax extension plugin file"
             (listed file))
+  ;;
 
   let target =
     Command.Spec.(flag "-o"
             ~doc:"<file.c> set the name of the c file to be created"
             (required file))
+  ;;
 
   let wrap_symbol =
     Command.Spec.(flag "-wrap-symbol"
             ~doc:" generate __wrap_ocaml_plugin_archive instead of ocaml_plugin_archive"
             no_arg)
+  ;;
 
   let verbose =
     Command.Spec.(flag "-verbose"
             ~doc:" be more verbose"
             no_arg)
+  ;;
 
   let files =
     Command.Spec.(anon (sequence ("<embedded-file>" %: file)))
+  ;;
 
   let all =
     Command.Spec.(
@@ -58,6 +67,7 @@ struct
       +> verbose
       +> files
     )
+  ;;
 end
 
 let readme () = "\
@@ -66,12 +76,15 @@ static string. The resulting .o file should be linked with any executable that u
 Ocaml_plugin.Ocaml_compiler module. Or you can link your executable with a .o file
 containing a dummy definition of the function ocaml_plugin_archive if you know you will
 not need it."
+;;
 
 let summary =
   "tool to embed ocamlopt and cmi files into a c file"
+;;
 
 exception Suspicious_files_in_tar of string list * string list with sexp
 exception Missing_files_in_tar of string list * string list with sexp
+;;
 
 let tar_check files tar =
   let cmp = String.compare in
@@ -87,10 +100,12 @@ let tar_check files tar =
     if missing <> []
     then raise (Missing_files_in_tar (missing, files));
   )
+;;
 
 let escape =
   let a = Array.init ~f:(Printf.sprintf "\\x%02x") 256 in
   fun c -> a.(Char.to_int c)
+;;
 
 let generate_c_file wrap_symbol target tar =
   let module Digest = Plugin_cache.Digest in
@@ -131,6 +146,7 @@ let generate_c_file wrap_symbol target tar =
     define "ocaml_plugin_archive_digest" ~varname:"s_digest" ~contents:str_digest;
     Writer.close w
   )
+;;
 
 let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbose files () =
   let _set_defaults_scope =
@@ -201,9 +217,12 @@ let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbo
     Ocaml_plugin.Tar.list tar >>=! fun check_files ->
     tar_check check_files files;
     Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ()
+;;
 
 let command =
   Command.async_basic ~summary ~readme Flags.all main
+;;
 
 let () =
   Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
+;;

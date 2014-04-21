@@ -79,21 +79,25 @@ module Flag = struct
     Command.Spec.(step (fun main strings ->
       List.iter ~f:fct strings;
       main) +> flag tag (listed string) ~doc)
+  ;;
 
   let set tag ~doc ref_ () =
     Command.Spec.(step (fun main bool ->
       if bool then ref_ := true;
       main) +> flag tag no_arg ~doc)
+  ;;
 
   let clear tag ~doc ref_ () =
     Command.Spec.(step (fun main bool ->
       if bool then ref_ := false;
       main) +> flag tag no_arg ~doc)
+  ;;
 
   let noarg tag ~doc fct () =
     Command.Spec.(step (fun main bool ->
       if bool then fct ();
       main) +> flag tag no_arg ~doc)
+  ;;
 end
 
 module Flags =
@@ -101,6 +105,7 @@ struct
   let split_files string =
     let files = String.split ~on:' ' string in
     List.map files ~f:String.strip
+  ;;
 
   let add_file tag version =
     let add sources =
@@ -116,63 +121,74 @@ struct
       tag
       ~doc:" add one or several ocaml config files to be loaded (sep by ' ')"
       add
+  ;;
 
   let rev_append_flags rev_acc flags =
     let flags = String.split ~on:' ' flags in
     let fold acc flag = if flag = "" then acc else flag :: acc in
     rev_acc := List.fold ~f:fold ~init:!rev_acc flags
+  ;;
 
   let v1 = add_file "-v1" `v1
   let v2 = add_file "-v2" `v2
   let util = add_file "-f" `util
+  ;;
 
   let embed =
     Flag.set
       "-embed"
       ~doc:" use the embedded mode of ocaml_plugin (needs standalone exe though)"
       embed_mode
+  ;;
 
   let error =
     Flag.set
       "-error"
       ~doc:(Printf.sprintf " load an ill-typed config to see what happens %s" conf_v1_error)
       load_error
+  ;;
 
   let clean =
     Flag.set
       "-clean"
       ~doc:" clean the builddir after dynamic loading"
       clean
+  ;;
 
   let no_default =
     Flag.clear
       "-n"
       ~doc:" do not load the default conf files, use custom files only"
       default
+  ;;
 
   let temp_dir =
     Flag.set
       "-tmp"
       ~doc:(Printf.sprintf " use a temp dir instead of %s" builddir)
       temp_dir
+  ;;
 
   let include_dir =
     Flag.string
       "-I"
       ~doc:"<dir>  Add <dir> to the list of include directories"
       (fun dir -> include_directories := dir :: !include_directories)
+  ;;
 
   let cmx_flag =
     Flag.string
       "-cmx-f"
       ~doc:"<flag> Add flag to the ocamlopt compilation of the cmx"
       (rev_append_flags cmx_flags)
+  ;;
 
   let cmxs_flag =
     Flag.string
       "-cmxs-f"
       ~doc:"<flag> Add flag to the ocamlopt -shared compilation of the cmxs"
       (rev_append_flags cmxs_flags)
+  ;;
 
   let all () = Command.Spec.(step (fun main -> main ())
     ++ v1 ()
@@ -188,6 +204,7 @@ struct
     ++ cmxs_flag ()
     ++ Ocaml_plugin.Shell.flags ()
   )
+  ;;
 end
 
 let readme () = "\
@@ -199,29 +216,36 @@ You can try to load some custom ocaml source files,
 play a bit with the options to test and see what happens
 in case of type errors, etc.
 "
+;;
 
 let summary = "simple example to test the ocaml_plugin library"
+;;
 
 let handle_error load = function
   | Result.Ok m -> load m
   | Result.Error e ->
     Printf.eprintf "Error:\n%s\n%!" (Error.to_string_hum e)
+;;
 
 let load_file loader = function
   | `v1 files ->
-    let v1 = Config.V1.load_ocaml_src_files loader (Flags.split_files files) in
+    let v1 = Config.V1.Load.load_ocaml_src_files loader (Flags.split_files files) in
     v1 >>| (handle_error Dsl.register_v1)
   | `v2 files ->
-    let v2 = Config.V2.load_ocaml_src_files loader (Flags.split_files files) in
+    let v2 = Config.V2.Load.load_ocaml_src_files loader (Flags.split_files files) in
     v2 >>| (handle_error Dsl.register_v2)
   | `util files ->
-    let res = Ocaml_dynloader.load_ocaml_src_files loader (Flags.split_files files) in
+    let res =
+      Ocaml_dynloader.Side_effect.load_ocaml_src_files loader (Flags.split_files files)
+    in
     res >>| (handle_error ignore)
+;;
 
 let load_default loader =
   load_file loader (`v1 conf_01) >>= fun () ->
-  let v2 = Config.V2.load_ocaml_src_files loader [conf_util;conf_02] in
+  let v2 = Config.V2.Load.load_ocaml_src_files loader [conf_util;conf_02] in
   v2 >>| (handle_error Dsl.register_v2)
+;;
 
 let main () () =
   let k_clean_loader =
@@ -282,11 +306,22 @@ let main () () =
   in
   dt >>> (fun () -> shutdown 0);
   Deferred.never ()
+;;
 
-let command =
+let run_command =
   Command.async_basic ~summary ~readme (
     Flags.all ()
   ) main
+;;
+
+let command =
+  Command.group ~summary:"Toy sample program for ocaml_plugin" [
+    "run", run_command;
+    "check-plugin-v1", Config.V1.check_plugin_cmd;
+    "check-plugin-v2", Config.V2.check_plugin_cmd;
+  ]
+;;
 
 let () =
   Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
+;;

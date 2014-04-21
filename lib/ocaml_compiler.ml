@@ -3,20 +3,25 @@ open Async.Std
 open Import
 
 let tar_id = "dynlink.tgz"
+;;
 
 let ocamlopt_opt = Ocaml_dynloader.ocamlopt_opt
-let camlp4o_opt = Ocaml_dynloader.camlp4o_opt
+let camlp4o_opt  = Ocaml_dynloader.camlp4o_opt
 let ocamldep_opt = Ocaml_dynloader.ocamldep_opt
+;;
 
-let pervasives = "pervasives.cmi"
+let pervasives  = "pervasives.cmi"
 let config_file = "config.sexp"
+;;
 
 let persistent_archive_subdir = "compiler"
+;;
 
 let mandatory_embedded_files = [
   ocamlopt_opt;
   pervasives;
 ]
+;;
 
 (* Map of the directories contents:
    - build_dir: /tmp/ocaml_plugin_XXXXX/{m_dyn_1_.ml,m_dyn_1_.o,m_dyn_1_.cmx,m_dyn_1_.cmxs,...}
@@ -71,9 +76,12 @@ external archive : unit -> string = "ocaml_plugin_archive"
 let archive () =
   let str = archive () in
   if str = "dummy" then None else Some str
+;;
+
 external archive_digest_binding : unit -> string = "ocaml_plugin_archive_digest"
 let archive_digest () =
   Plugin_cache.Digest.of_string (archive_digest_binding ())
+;;
 
 let () =
   match Core.Std.Sys.getenv "OCAML_PLUGIN_DUMP_ARCHIVE" with
@@ -89,6 +97,7 @@ let () =
     | Some str -> Printf.printf "%s%!" str;
     end;
     Core.Caml.Pervasives.exit 0
+;;
 
 let save_archive_to destination =
   Deferred.Or_error.try_with (fun () ->
@@ -96,8 +105,10 @@ let save_archive_to destination =
     | None -> failwith "There is no embedded compiler in the current executable"
     | Some contents -> Writer.save destination ~contents
   )
+;;
 
 exception Mandatory_file_not_found of string * string list with sexp
+;;
 
 (* Because the directory is empty before check_mandatory_files is called (modulo the
    archive itself), it can return the contents of the archive simply by reading everything
@@ -115,6 +126,7 @@ let check_mandatory_files working_dir =
     files
   in
   Deferred.Or_error.try_with ~extract_exn:true fct
+;;
 
 type 'a create_arguments = (
   ?persistent_archive_dirpath:string
@@ -139,6 +151,7 @@ end = struct
 
     let info_file_name = "archive-info.sexp"
     let info_file dir = dir ^/ info_file_name
+    ;;
 
     let create () =
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
@@ -157,25 +170,31 @@ end = struct
         build_info;
         archive_digest;
       }
+    ;;
 
     let info_file_perm = 0o644
+    ;;
 
     let save dir =
       create () >>=? fun t ->
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Writer.save_sexp ~perm:info_file_perm (info_file dir) (sexp_of_t t)
       )
+    ;;
 
     let load dir =
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Reader.load_sexp_exn ~exclusive:true (info_file dir) t_of_sexp
       )
+    ;;
 
     let is_up_to_date t =
       Digest.compare (archive_digest ()) t.archive_digest = 0
+    ;;
   end
 
   let extract_throttle = Throttle.Sequencer.create ~continue_on_error:true ()
+  ;;
 
   let extract ~archive_lock ~persistent compiler_dir =
     let extract () =
@@ -205,6 +224,7 @@ end = struct
     )
     else
       extract ()
+  ;;
 end
 
 let create
@@ -277,8 +297,11 @@ let create
     archive_lock;
   } in
   Deferred.return (Ok (`this_needs_manual_cleaning_after compiler))
+;;
 
 let created_but_not_cleaned = Bag.create ()
+;;
+
 let () =
   (* I think we can rely on the at_shutdown handlers only firing in the current process
      and not in the forks. In that case, worse things could happen than deleting the
@@ -294,8 +317,10 @@ let shutting_down () =
   match Shutdown.shutting_down () with
   | `No    -> false
   | `Yes _ -> true
+;;
 
 exception Shutting_down with sexp
+;;
 
 let with_compiler
     ?in_dir
@@ -342,6 +367,7 @@ let with_compiler
       | Error _ as error, Ok ()   -> error
     end
   end
+;;
 
 let make_load_ocaml_src_files load_ocaml_src_files =
   let aux
@@ -375,10 +401,85 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ()
   in
   aux
+;;
 
-module Make (X:Ocaml_dynloader.Module_type) = struct
-  module M = Ocaml_dynloader.Make(X)
-  let load_ocaml_src_files = make_load_ocaml_src_files M.load_ocaml_src_files
+let make_check_plugin_cmd ~check_ocaml_src_files =
+  let arg_spec =
+    Command.Spec.(
+      empty
+      +> anon (sequence ("path/to/plugin.ml" %: file))
+      +> flag "-ocamldep" no_arg
+           ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
+      +> flag "-verbose" no_arg
+           ~doc:" Be more verbose"
+    )
+  in
+  let main plugin_filenames use_ocamldep is_verbose () =
+    let f compiler =
+      let loader = loader compiler in
+      (if use_ocamldep
+       then
+         (match plugin_filenames with
+          | [ main ] -> Ocaml_dynloader.find_dependencies loader main
+          | [] | _ :: _ :: _ ->
+            return
+              (Or_error.error "Give only the main file when using option -ocamldep"
+                 plugin_filenames <:sexp_of< string list >>))
+       else return (Ok plugin_filenames)
+      ) >>=? fun plugin_filenames ->
+      if is_verbose then
+        Print.printf "checking: %s\n%!" (String.concat ~sep:" " plugin_filenames);
+      check_ocaml_src_files loader plugin_filenames
+    in
+    with_compiler
+      ~f ()
+    >>| function
+    | Ok () ->
+      if is_verbose then Print.printf "ok\n%!";
+      Shutdown.shutdown 0
+    | Error err ->
+      Print.eprintf "%s\n%!" (Error.to_string_hum err);
+      Shutdown.shutdown 1
+  in
+  Command.async_basic ~summary:"Check a plugin for compilation/loading errors"
+    arg_spec
+    main
+;;
+
+module type S = sig
+  type t
+
+  val load_ocaml_src_files : (
+    string list -> t Deferred.Or_error.t
+  ) create_arguments
+
+  val check_ocaml_src_files : (
+    string list -> unit Deferred.Or_error.t
+  ) create_arguments
+
+  val check_plugin_cmd : Command.t
+
+  module Load : Ocaml_dynloader.S with type t := t
 end
 
-let load_ocaml_src_files = make_load_ocaml_src_files Ocaml_dynloader.load_ocaml_src_files
+module Make (X:Ocaml_dynloader.Module_type) = struct
+  module Load = Ocaml_dynloader.Make(X)
+  let load_ocaml_src_files  = make_load_ocaml_src_files Load.load_ocaml_src_files
+  let check_ocaml_src_files = make_load_ocaml_src_files Load.check_ocaml_src_files
+  ;;
+
+  let check_plugin_cmd =
+    make_check_plugin_cmd ~check_ocaml_src_files:Load.check_ocaml_src_files
+  ;;
+end
+
+module Side_effect = struct
+  module Load = Ocaml_dynloader.Side_effect
+  let load_ocaml_src_files = make_load_ocaml_src_files Load.load_ocaml_src_files
+  let check_ocaml_src_files = make_load_ocaml_src_files Load.check_ocaml_src_files
+  ;;
+
+  let check_plugin_cmd =
+    make_check_plugin_cmd ~check_ocaml_src_files:Load.check_ocaml_src_files
+  ;;
+end

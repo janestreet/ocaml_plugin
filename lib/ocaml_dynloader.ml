@@ -1,11 +1,12 @@
-
 open Core.Std
 open Async.Std
 
 (* The default policy about warnings *)
 let default_warnings_spec = "@a-4-29-44"
+;;
 
 let index = ref 0
+;;
 
 module Config = struct
   type t = {
@@ -31,19 +32,26 @@ type t = {
   run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ];
 } with fields
 
+type dynloader = t
+
 let next_filename () =
   let s = Printf.sprintf "m_dyn_%d_.ml" !index in
   incr index;
   s
+;;
 
 let ocamlopt_opt = "ocamlopt.opt"
-let camlp4o_opt = "camlp4o.opt"
+let camlp4o_opt  = "camlp4o.opt"
 let ocamldep_opt = "ocamldep.opt"
+;;
 
 module Compilation_config = struct
 
   let info_file_name = "info"
+  ;;
+
   let info_file dir = dir ^/ info_file_name
+  ;;
 
   module Info = struct
     (*
@@ -77,14 +85,17 @@ module Compilation_config = struct
         } in
         sexp_of_t t
       )
+    ;;
 
     let get = Lazy_deferred.create create
+    ;;
 
     let save info_file =
       Lazy_deferred.force_exn get >>=? fun info ->
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Writer.save_sexp ~hum:true info_file info
       )
+    ;;
   end
 
   let lazy_create ~initialize_compilation_callback ~in_dir =
@@ -107,6 +118,7 @@ module Compilation_config = struct
         | Error e2 -> Error (Error.of_list [e; e2])
     in
     Lazy_deferred.create compute
+  ;;
 end
 
 let update_with_config t = function
@@ -116,6 +128,7 @@ let update_with_config t = function
     { t with
       pa_files;
     }
+;;
 
 exception Is_not_native with sexp
 
@@ -182,6 +195,7 @@ let create
       run_plugin_toplevel;
     } in
   Deferred.return (Ok t)
+;;
 
 let clean_compilation_directory t =
   if not (Lazy_deferred.is_forced t.compilation_config) then return (Ok ())
@@ -196,6 +210,7 @@ let clean_compilation_directory t =
     | Ok (directory, _) ->
       Shell.rm ~r:() ~f:() [directory]
   end
+;;
 
 let clean_plugin_cache t =
   match t.cache with
@@ -208,6 +223,7 @@ let clean_plugin_cache t =
       | Ok cache ->
         Plugin_cache.clean cache
     end
+;;
 
 let clean t =
   if t.cleaned then return (Ok ())
@@ -220,6 +236,7 @@ let clean t =
       r2;
     ]
   end
+;;
 
 module Univ_constr = struct
   type 'a t = 'a Type_equal.Id.t
@@ -241,9 +258,12 @@ exception Dynlink_error of string with sexp
 exception Plugin_did_not_return with sexp
 exception Return_plugin of (unit -> Univ.t)
 
+;;
+
 let return_plugin (type a) (constr : a Univ_constr.t) (fct : unit -> a) =
   let fct () = Univ.create constr (fct ()) in
   raise (Return_plugin fct)
+;;
 
 module Compile : sig
 
@@ -269,8 +289,10 @@ end = struct
   let output_in_channel out_channel in_channel =
     let content = In_channel.input_all in_channel in
     Out_channel.output_string out_channel content
+  ;;
 
   let permission = 0o600
+  ;;
 
   let copy_files ~trigger_unused_value_warnings_despite_mli ~working_dir plugin_uuid =
     let fct () =
@@ -355,6 +377,7 @@ end = struct
       target
     in
     Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+  ;;
 
 
   (* Dynlink has the following not really wanted property: dynlinking a file with a given
@@ -375,10 +398,12 @@ end = struct
     | Dynlink.Error e ->
       raise (Dynlink_error (Dynlink.error_message e))
     | Return_plugin univ -> univ
+  ;;
 
   let dynlink ?export cmxs_filename =
     let fct () = blocking_dynlink ?export cmxs_filename in
     Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+  ;;
 
   let compile_and_load_file ~working_dir t ?export ~basename =
     let basename_without_ext =
@@ -420,9 +445,11 @@ end = struct
     let cmxs = working_dir ^/ cmxs in
     dynlink ?export cmxs >>|? fun univ ->
     cmxs, univ
+  ;;
 end
 
 exception Usage_of_cleaned_dynloader with sexp
+;;
 
 let find_dependencies t filename =
   if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
@@ -476,6 +503,7 @@ let find_dependencies t filename =
        | `Unknown -> Or_error.errorf "File in unknown state: %s" mli
      ) >>| Or_error.all)
     >>|? List.concat
+;;
 
 let load_ocaml_src_files_plugin_uuid ~repr t filenames =
   if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
@@ -529,15 +557,30 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
           Deferred.return error
     end
     | None -> refresh_cache ()
+;;
 
 exception Plugin_not_found of Plugin_uuid.t with sexp
 exception Type_mismatch of string * string with sexp
+;;
+
+module type S = sig
+  type t
+  val load_ocaml_src_files :
+    dynloader -> string list -> t Deferred.Or_error.t
+  val check_ocaml_src_files :
+    dynloader -> string list -> unit Deferred.Or_error.t
+end
+;;
 
 module Make (X:Module_type) =
 struct
-  let load_ocaml_src_files t filenames =
+  let load_ocaml_src_files_without_running_them t filenames =
     let repr = Plugin_uuid.Repr.create ~t:X.t_repr ~univ_constr:X.univ_constr_repr in
-    load_ocaml_src_files_plugin_uuid ~repr t filenames >>=? fun make_plugin ->
+    load_ocaml_src_files_plugin_uuid ~repr t filenames
+  ;;
+
+  let load_ocaml_src_files t filenames =
+    load_ocaml_src_files_without_running_them t filenames >>=? fun make_plugin ->
     (* There is an hidden invariant there: if the OCaml compilation succeed, that
        means that the loaded module has the type represented in X.repr, so the
        [Univ.match_] will succeed. Of course this is only true is the user gave
@@ -549,17 +592,26 @@ struct
         | Some plugin -> Ok plugin
         | None ->
           Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
-      end with exn -> Or_error.of_exn exn
+      end with exn ->
+        Or_error.tag (Or_error.of_exn exn)
+          "Exception while executing the plugin's toplevel"
     in
     match t.run_plugin_toplevel with
     | `In_async_thread  -> Deferred.return (run ())
     | `Outside_of_async -> In_thread.run run
+  ;;
+
+  let check_ocaml_src_files t filenames =
+    load_ocaml_src_files_without_running_them t filenames >>|? fun (_ : unit -> Univ.t) ->
+    ()
+  ;;
 end
 
 module type Side_effect = sig
 end
 
 let side_effect_univ_constr = Univ_constr.create ()
+;;
 
 module Side_effect_loader = Make(struct
   type t = (module Side_effect)
@@ -568,6 +620,12 @@ module Side_effect_loader = Make(struct
   let univ_constr_repr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
 end)
 
-let load_ocaml_src_files t filenames =
-  Side_effect_loader.load_ocaml_src_files t filenames
-  >>|? fun (_ : (module Side_effect)) -> ()
+module Side_effect = struct
+  let load_ocaml_src_files t filenames =
+    Side_effect_loader.load_ocaml_src_files t filenames
+    >>|? fun (_ : (module Side_effect)) -> ()
+  ;;
+
+  let check_ocaml_src_files = Side_effect_loader.check_ocaml_src_files
+  ;;
+end

@@ -29,13 +29,13 @@ let run
              Printf.printf "Loaded %s\n"
                (String.concat (List.map files ~f:Filename.basename) ~sep:" ")
            end;
-           Ocaml_dynloader.load_ocaml_src_files loader files
+           Ocaml_dynloader.Side_effect.load_ocaml_src_files loader files
          )
          ()
      | _ ->
        failwithf "When --find-dependencies is specified, only one file should be given" ()
    else
-     Ocaml_compiler.load_ocaml_src_files
+     Ocaml_compiler.Side_effect.load_ocaml_src_files
        ~in_dir
        ~trigger_unused_value_warnings_despite_mli
        ~run_plugin_toplevel

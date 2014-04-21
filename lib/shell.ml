@@ -2,14 +2,17 @@ open Core.Std
 open Async.Std
 
 let permission_exe = 0o700
+;;
 
-let echo = ref false
+let echo    = ref false
 let verbose = ref false
+;;
 
 let set_defaults ?verbose:(v = !verbose) ?echo:(e = !echo) () =
   echo := e;
   verbose := v;
   ()
+;;
 
 module Process_flag =
 struct
@@ -20,6 +23,7 @@ struct
         no_arg
         ~doc:" show external shell calls"
     )
+  ;;
 
   let verbose =
     Command.Spec.(
@@ -28,16 +32,20 @@ struct
         no_arg
         ~doc:" let external shell call be more verbose (imply -shell-echo)"
     )
+  ;;
 
   let all () = Command.Spec.(step (fun main echo verbose ->
     set_defaults ~echo ~verbose ();
     main
   ) +> echo +> verbose)
+  ;;
 end
 
 let flags = Process_flag.all
+;;
 
 let endline std = if std = "" then std else std ^ "\n"
+;;
 
 let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
   if !echo then
@@ -85,8 +93,11 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
       ))
       in
       Error error
+;;
 
 let run = make_run ignore
+;;
+
 let run_lines = make_run ~quiet_or_error:false
   (function { Process.Output.stdout ; _ } ->
     let list = String.split ~on:'\n' stdout in
@@ -95,15 +106,19 @@ let run_lines = make_run ~quiet_or_error:false
     in
     list
   )
+;;
 
 let mkdir_p ?(perm=permission_exe) path =
   run "/bin/mkdir" [ "-p" ; sprintf "-m0%o" perm ; "--" ; path ]
+;;
 
 let getcwd () =
   Deferred.Or_error.try_with ~name:"Ocaml_plugin.Shell.getcwd" Sys.getcwd
+;;
 
 let chmod pathname ~perm =
   Deferred.Or_error.try_with ~extract_exn:true (fun () -> Unix.chmod pathname ~perm)
+;;
 
 let raw_temp_dir ~in_dir =
   let fct () =
@@ -115,6 +130,7 @@ let raw_temp_dir ~in_dir =
   in
   mkdir_p ~perm:permission_exe in_dir >>=? fun () ->
   Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+;;
 
 let absolute_pathname filename =
   if Filename.is_relative filename
@@ -123,6 +139,7 @@ let absolute_pathname filename =
       prefix ^/ filename
   else
     Deferred.return (Ok filename)
+;;
 
 let absolute_pathnames filenames =
   let relative = ref false in
@@ -147,23 +164,29 @@ let absolute_pathnames filenames =
       | `relative _ -> assert false
     ) in
     Deferred.return (Ok files)
+;;
 
 (* this should return an absolute pathname *)
 let temp_dir ~in_dir =
   raw_temp_dir ~in_dir >>=? absolute_pathname
+;;
 
 let rm ?r ?f paths =
   let r = Option.map r ~f:(fun () -> "-r") in
   let f = Option.map f ~f:(fun () -> "-f") in
   run "/bin/rm" (List.filter_map ~f:ident [r; f] @ ("--" :: paths))
+;;
 
 let rmdir dir =
   run "/bin/rmdir" [ dir ]
+;;
 
 let cp ~source ~dest =
   run "/bin/cp" [ source ; dest ]
+;;
 
 let readdir dir =
   Deferred.Or_error.try_with (fun () ->
     Sys.readdir dir
   )
+;;

@@ -79,22 +79,38 @@ val loader : t -> Ocaml_dynloader.t
 *)
 val clean : t -> unit Deferred.Or_error.t
 
+module type S = sig
+  type t
+
+  val load_ocaml_src_files : (
+    string list -> t Deferred.Or_error.t
+  ) create_arguments
+
+  val check_ocaml_src_files : (
+    string list -> unit Deferred.Or_error.t
+  ) create_arguments
+
+  (** Command that checks that the anon files given compile and match the interface [X]
+      given. Also provides a [-ocamldep] mode allowing only the main file to be passed on
+      the command line. *)
+  val check_plugin_cmd : Command.t
+
+  (** [Load] contains functions similar to the ones above, and can be used if you want to
+      separate extraction of the compiler from building/loading files. It can be useful if
+      you want to extract the compiler upfront (to improve latency a bit) or if you want
+      to share the cost of extracting the compiler for the current executable over
+      multiple compilations. Probably not needed by the casual user *)
+  module Load : Ocaml_dynloader.S with type t := t
+end
+
 (**
    This is a wrapper for the similar module in Ocaml_dynloader that takes care of cleaning
    the compiler afterwards.
 *)
-module Make : functor (X : Ocaml_dynloader.Module_type) -> sig
-
-  val load_ocaml_src_files : (
-    string list -> X.t Deferred.Or_error.t
-  ) create_arguments
-
-end
+module Make : functor (X : Ocaml_dynloader.Module_type) -> S with type t := X.t
 
 (**
    In some cases, we are not interested by the module, but rather because it uses
    a side effect registering mechanism.
 *)
-val load_ocaml_src_files : (
-  string list -> unit Deferred.Or_error.t
-) create_arguments
+module Side_effect : S with type t := unit
