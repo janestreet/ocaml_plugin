@@ -441,7 +441,7 @@ let make_check_plugin_cmd ~check_ocaml_src_files =
       Print.eprintf "%s\n%!" (Error.to_string_hum err);
       Shutdown.shutdown 1
   in
-  Command.async_basic ~summary:"Check a plugin for compilation/loading errors"
+  Command.async ~summary:"Check a plugin for compilation/loading errors"
     arg_spec
     main
 ;;

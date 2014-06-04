@@ -309,7 +309,7 @@ let main () () =
 ;;
 
 let run_command =
-  Command.async_basic ~summary ~readme (
+  Command.async ~summary ~readme (
     Flags.all ()
   ) main
 ;;

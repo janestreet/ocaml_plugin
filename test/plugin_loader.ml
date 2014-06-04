@@ -95,7 +95,7 @@ end
 let summary = "unit test program for ocaml-plugin"
 
 let command =
-  Command.(async_basic ~summary Spec.(
+  Command.(async ~summary Spec.(
     empty
     +> Flags.use_cache ()
     +> Flags.persistent_archive ()

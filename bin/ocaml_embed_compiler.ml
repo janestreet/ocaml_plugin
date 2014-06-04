@@ -220,7 +220,7 @@ let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbo
 ;;
 
 let command =
-  Command.async_basic ~summary ~readme Flags.all main
+  Command.async ~summary ~readme Flags.all main
 ;;
 
 let () =
