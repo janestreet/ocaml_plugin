@@ -107,44 +107,66 @@ let escape =
   fun c -> a.(Char.to_int c)
 ;;
 
+let transfer_escaped ~file ~writer =
+  Reader.with_file file ~f:(fun reader ->
+    let transfered = ref 0 in
+    Reader.read_one_chunk_at_a_time reader
+      ~handle_chunk:(fun buf ~pos ~len ->
+        for i = 0 to len - 1 do
+          let c = buf.{pos + i} in
+          if (!transfered + i) mod 20 = 0 then Writer.write writer "\"\n  \"";
+          Writer.write writer (escape c)
+        done;
+        transfered := !transfered + len;
+        Deferred.return `Continue)
+    >>| function
+    | `Eof -> !transfered
+    | `Stopped _ | `Eof_with_unconsumed_data _ -> assert false
+  )
+;;
+
+let ocaml_plugin_archive_template : (_, _, _, _) format4 = "\
+CAMLprim value %socaml_plugin_archive (value unit __attribute__ ((unused)))
+{
+  intnat dim = %d;
+  int flags = CAML_BA_UINT8 | CAML_BA_C_LAYOUT | CAML_BA_EXTERNAL;
+  return caml_ba_alloc(flags, 1, s, &dim);
+}
+"
+
+let ocaml_plugin_archive_digest_template : (_, _, _, _) format4 = "\
+CAMLprim value %socaml_plugin_archive_digest (value unit __attribute__ ((unused)))
+{
+  return caml_copy_string(%S);
+}
+"
+
 let generate_c_file wrap_symbol target tar =
   let module Digest = Plugin_cache.Digest in
   Monitor.try_with ~here:_here_ (fun () ->
-    Reader.file_contents tar >>= fun str ->
-    let str_digest = Digest.to_string (Digest.string str) in
-    Writer.open_file target >>= fun w ->
-    Writer.write w (String.concat ~sep:"\n" [
-      "#include <string.h>";
-      "#include <caml/mlvalues.h>";
-      "#include <caml/memory.h>";
-      "#include <caml/alloc.h>";
-      "";
-    ]);
-    let write_static ~varname ~contents:str =
-      Writer.write w (sprintf "static char %s[] = \"" varname);
-      for i = 0 to String.length str - 1 do
-        let c = str.[i] in
-        Writer.write w (escape c)
-      done;
-      Writer.write w "\";\n";
-    in
-    let wrap = if wrap_symbol then "__wrap_" else "" in
-    let define fctname ~varname ~contents:str =
-      Writer.write w (String.concat ~sep:"\n" [
-        "CAMLprim value " ^ wrap ^ fctname ^ " (value unit __attribute__ ((unused)))";
-        "{";
-        sprintf "  value v = caml_alloc_string(%d);" (String.length str);
-        sprintf "  memcpy(String_val(v), %s, %d);" varname (String.length str);
-        "  return(v);";
-        "}";
-        ""; (* error from gcc on centos5 if there is no newline at the end of file *)
+    Digest.file tar >>=! fun file_digest ->
+    let file_digest = Digest.to_string file_digest in
+    Writer.with_file target ~f:(fun writer ->
+      Writer.write writer (String.concat ~sep:"\n" [
+         (* avoid making emacs die trying to highlight the huge string *)
+        "/* -*- mode: fundamental; -*- */";
+        "#include <string.h>";
+        "#include <caml/mlvalues.h>";
+        "#include <caml/memory.h>";
+        "#include <caml/alloc.h>";
+        "#include <caml/bigarray.h>";
+        "";
       ]);
-    in
-    write_static  ~varname:"s"        ~contents:str;
-    write_static  ~varname:"s_digest" ~contents:str_digest;
-    define "ocaml_plugin_archive"        ~varname:"s"        ~contents:str;
-    define "ocaml_plugin_archive_digest" ~varname:"s_digest" ~contents:str_digest;
-    Writer.close w
+      Writer.write writer "static char s[] = \"";
+      transfer_escaped ~file:tar ~writer >>| fun file_length ->
+      Writer.write writer "\";\n\n";
+      let wrap = if wrap_symbol then "__wrap_" else "" in
+      Printf.ksprintf (Writer.write writer)
+        ocaml_plugin_archive_template wrap file_length;
+      Writer.write writer "\n";
+      Printf.ksprintf (Writer.write writer)
+        ocaml_plugin_archive_digest_template wrap file_digest;
+    )
   )
 ;;
 
