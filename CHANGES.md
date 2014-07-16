@@ -1,3 +1,12 @@
+## 111.21.00
+
+- Fixed a bug in `ocaml_embed_compiler` on 32-bit machines.
+
+    `ocaml_embed_compiler` tries to read the full contents of the file as
+    a string, but the string might be too big on 32bits:
+
+    https://github.com/ocaml/opam-repository/pull/2062#issuecomment-43045491
+
 ## 111.11.00
 
 - Added a tag to exceptions coming from the toplevel execution of
