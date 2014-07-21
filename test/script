@@ -4,6 +4,7 @@
 exec 2>&1
 
 function cleanup {
+    chmod -R +w readonly 2>/dev/null || true
     rm -rf cache tmp_dir readonly {t,T}est{,1,2,3}.ml{,i} invalid-name.ml
 }
 trap 'cleanup' EXIT INT QUIT
@@ -81,7 +82,7 @@ echo
 echo 'Loading ml with mli by mentioning wrong mli'
 echo 'val a : int' > test.mli
 output="$(./plugin_loader.exe ./test.mli 2>&1)"
-if grep -q 'The field `a'\'' is required' <<< "$output"; then
+if grep -q 'The \(field\|value\) `a'\'' is required' <<< "$output"; then
     echo 'failed fine'
 else
     echo "broken test: $output"
@@ -210,7 +211,6 @@ if [ "$output" = "$expected" ]; then
 else
     echo "broken test: $output"
 fi
-chmod -R +w readonly
 echo
 
 echo 'loading file with a wrong name'
