@@ -1,3 +1,7 @@
+## 111.25.00
+
+- ignore more warnings by default
+
 ## 111.21.00
 
 - Fixed a bug in `ocaml_embed_compiler` on 32-bit machines.
