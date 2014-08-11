@@ -312,7 +312,7 @@ module State = struct
             t.index <- succ index;
             let sources = Plugin.sources plugin in
             let key = Sources.key sources in
-            Key.Table.replace t.table ~key ~data:(index, plugin);
+            Key.Table.set t.table ~key ~data:(index, plugin);
             Deferred.return ()
           | Error _ ->
             Deferred.return ()

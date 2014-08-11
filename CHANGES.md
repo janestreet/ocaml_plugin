@@ -1,3 +1,11 @@
+## 111.28.00
+
+- Fixed a bug in tests that could leave the repository in a state where
+  running the tests would fail.
+
+    The bug happened if the tests were interrupted after creating
+    read-only directories but before cleaning then up.
+
 ## 111.25.00
 
 - ignore more warnings by default
