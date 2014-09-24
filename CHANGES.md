@@ -1,3 +1,7 @@
+## 112.01.00
+
+- Changed to not use `rm -r` when it is expected to remove one file.
+
 ## 111.28.00
 
 - Fixed a bug in tests that could leave the repository in a state where

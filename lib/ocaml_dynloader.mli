@@ -168,7 +168,7 @@ val compilation_config :
 val clean : t -> unit Deferred.Or_error.t
 
 module Univ_constr : sig
-  type 'a t = 'a Type_equal.Id.t
+  type 'a t
   val create : unit -> 'a t
 end
 

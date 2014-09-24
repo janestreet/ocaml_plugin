@@ -2,7 +2,7 @@ open Core.Std
 open Async.Std
 
 (* The default policy about warnings *)
-let default_warnings_spec = "@a-4-29-40-41-42-44-45"
+let default_warnings_spec = "@a-4-29-40-41-42-44-45-48"
 ;;
 
 let index = ref 0

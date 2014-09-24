@@ -213,7 +213,7 @@ end = struct
            the info file has not been deleted, then the extracted archive would be
            corrupted because it doesn't match the info file anymore.  This is why we first
            delete the info file, then delete everything else. *)
-        Shell.rm ~r:() ~f:() [ Info.info_file compiler_dir ] >>=? fun () ->
+        Shell.rm       ~f:() [ Info.info_file compiler_dir ] >>=? fun () ->
         Shell.rm ~r:() ~f:() [ compiler_dir ] >>=? fun () ->
         Shell.mkdir_p ~perm:0o755 compiler_dir
       ) >>=? fun () ->
