@@ -174,7 +174,7 @@ let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbo
   let _set_defaults_scope =
     Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
   in
-  Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name >>=! fun tmpdir ->
+  Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
   let seen = String.Table.create () in
   let cp ~filename ~basename =
     let () =

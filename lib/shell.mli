@@ -35,7 +35,12 @@ val chmod : string -> perm:Unix.file_perm -> unit Deferred.Or_error.t
 (**
    When this function succeed, it returns a absolute pathname.
 *)
-val temp_dir : in_dir:string -> string Deferred.Or_error.t
+val temp_dir
+  :  in_dir:string
+  -> ?prefix:string (* default: "ocaml_plugin_" *)
+  -> ?suffix:string (* default: ".build" *)
+  -> unit
+  -> string Deferred.Or_error.t
 
 val absolute_pathname : string -> string Deferred.Or_error.t
 val absolute_pathnames : string list -> string list Deferred.Or_error.t

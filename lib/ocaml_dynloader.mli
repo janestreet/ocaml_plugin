@@ -251,6 +251,39 @@ module type S = sig
       checks that compilation and dynamic linking work. *)
   val check_ocaml_src_files :
     dynloader -> string list -> unit Deferred.Or_error.t
+
+  (** The following functions are used for step by step use, not for the casual user
+      because they are much more error prone. Prefer [load_ocaml_src_files] if possible *)
+
+  (** This compiles the source files into cmxs file, but does not execute the plugin
+      toplevel. The resulting cmxs file can be loaded by [blocking_load_cmxs_file] either
+      from the same process or other processes which share the same executable. If compile
+      succeeds, it returns [Ok] and write the compiled cmxs file into [output_file] (may
+      override existing file), otherwise it returns [Error] and won't write to
+      [output_file] at all. *)
+  val compile_ocaml_src_files_into_cmxs_file
+    :  dynloader
+    -> string list
+    -> output_file:string (* like -o option of gcc *)
+    -> unit Deferred.Or_error.t
+
+  (** Dynlink has the following not really wanted property: dynlinking a file with a given
+      filename only works properly the first time. Further dynlinks with the same filename
+      (even a different file) will not load the new module but instead execute the initial
+      module. Some even says that the behavior upon reload depends on the platform. Long
+      story short: don't do that. Dynlink files at most once.
+
+      It is worth noting too that this function only works with cmxs files produced by
+      ocaml_plugin's [compile_ocaml_src_files_into_cmxs_file]. It expects the code to
+      perform some internal library calls, thus it cannot be used with any arbitrary cmxs
+      compiled in some other way.
+
+      Be aware that if you load a cmxs file that was built by the function
+      [compile_ocaml_src_files_into_cmxs_file] from a different module [S], you would get
+      an [Error] value because the type of the first class module types won't match. But
+      the code would still be executed, that is top level side effects of the given cmxs
+      would be executed even though the function returns an error *)
+  val blocking_load_cmxs_file : string -> t Or_error.t
 end
 
 module Make : functor (X : Module_type) -> S with type t := X.t

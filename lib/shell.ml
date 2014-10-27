@@ -120,13 +120,13 @@ let chmod pathname ~perm =
   Deferred.Or_error.try_with ~extract_exn:true (fun () -> Unix.chmod pathname ~perm)
 ;;
 
-let raw_temp_dir ~in_dir =
+let raw_temp_dir ~in_dir ?(prefix="ocaml_plugin_") ?(suffix=".build") () =
   let fct () =
     Filename.temp_dir
       ~perm:permission_exe
       ~in_dir
-      "ocaml_plugin_"
-      ".build"
+      prefix
+      suffix
   in
   mkdir_p ~perm:permission_exe in_dir >>=? fun () ->
   Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
@@ -167,8 +167,8 @@ let absolute_pathnames filenames =
 ;;
 
 (* this should return an absolute pathname *)
-let temp_dir ~in_dir =
-  raw_temp_dir ~in_dir >>=? absolute_pathname
+let temp_dir ~in_dir ?prefix ?suffix () =
+  raw_temp_dir ~in_dir ?prefix ?suffix () >>=? absolute_pathname
 ;;
 
 let rm ?r ?f paths =

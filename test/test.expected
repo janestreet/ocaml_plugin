@@ -102,3 +102,8 @@ loaded ml correctly
 loading several ml files with different cases and using ocamldep
 ok
 
+bug CORE-20
+ok
+
+generative functors are allowed
+ok

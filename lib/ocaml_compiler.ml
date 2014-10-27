@@ -190,7 +190,7 @@ end = struct
 
     let load dir =
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-        Reader.load_sexp_exn ~exclusive:true (info_file dir) t_of_sexp
+        Reader.load_sexp_exn (info_file dir) t_of_sexp
       )
     ;;
 

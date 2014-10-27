@@ -5,7 +5,7 @@ exec 2>&1
 
 function cleanup {
     chmod -R +w readonly 2>/dev/null || true
-    rm -rf cache tmp_dir readonly {t,T}est{,1,2,3}.ml{,i} invalid-name.ml
+    rm -rf cache tmp_dir readonly {t,T}est{,1,2,3}.ml{,i} invalid-name.ml {a,b}.ml{,i}
 }
 trap 'cleanup' EXIT INT QUIT
 cleanup
@@ -185,9 +185,12 @@ fi
 echo
 
 echo 'loading several ml files'
-echo 'let x = Test2.x ^ "-middle"' > test1.ml
-echo 'let x = "first"' > test2.ml
-echo 'let x = Test1.x ^ "-last";; print_endline x' > test3.ml
+echo '#!/usr/bin/env ocaml' > test1.ml
+echo 'let x = Test2.x ^ "-middle"' >> test1.ml
+echo '#!/usr/bin/env ocaml' > test2.ml
+echo 'let x = "first"' >> test2.ml
+echo '#!/usr/bin/env ocaml' > test3.ml
+echo 'let x = Test1.x ^ "-last";; print_endline x' >> test3.ml
 output="$(./plugin_loader.exe test2.ml test1.ml test3.ml 2>&1)"
 if [ "$output" = 'first-middle-last' ]; then
     echo 'loaded in the right order and with the right scope'
@@ -202,7 +205,8 @@ echo 'let () = print_endline "this should not be loaded"' > readonly/test.ml
 echo 'let () "this syntax error shall not be a problem"' > readonly/test_with_typo.ml
 echo 'open Core.Std;; let x = Test2.x ^ (sprintf !"%{sexp: string}" "-middle")' > readonly/test1.ml
 echo 'let x = "first"' > readonly/test2.ml
-echo 'let x = Test1.x ^ "-last";; print_endline x' > readonly/test3.ml
+echo '#!/usr/bin/env ocaml' > readonly/test3.ml
+echo 'let x = Test1.x ^ "-last";; print_endline x' >> readonly/test3.ml
 chmod -R -w readonly
 output="$(VERBOSE= ./plugin_loader.exe --find-dependencies readonly/test3.ml 2>&1)"
 expected=$'Loaded test2.ml test1.ml test3.ml\nfirst-middle-last'
@@ -454,7 +458,8 @@ echo 'loading several ml files with different cases and using ocamldep'
 rm -f [tT]est{,1}.ml{,i}
 echo 'let y = "foo"' > Test.ml
 echo 'val y : string' > Test.mli
-echo 'print_endline Test.y;; let x = Test.y' > test1.ml
+echo '#!/usr/bin/env ocaml' > test1.ml
+echo 'print_endline Test.y;; let x = Test.y' >> test1.ml
 echo 'val x : string' > test1.mli
 output="$(VERBOSE= ./plugin_loader.exe --find-dependencies test1.ml 2>&1)"
 expected=$'Loaded Test.mli Test.ml test1.mli test1.ml\nfoo'
@@ -464,3 +469,23 @@ else
     echo "broken test: $output"
 fi
 echo
+
+echo 'bug CORE-20'
+rm -f {a,b}.ml{,i}
+echo 'type t = string' > a.ml
+echo 'type t = A.t' > b.mli
+echo 'type t = A.t' > b.ml
+echo 'let () = print_endline "hello CORE-20"' >> b.ml
+output="$(./plugin_loader.exe a.ml b.mli b.ml 2>&1)"
+expected=$'hello CORE-20'
+if [ "$output" = "$expected" ]; then
+  echo 'ok'
+else
+  echo "broken test: $output"
+fi
+echo
+
+echo 'generative functors are allowed'
+rm -f {t,T]est.ml{,i}
+echo 'module F() = struct type _t end;; include F();; print_endline "ok"' > test.ml
+./plugin_loader.exe test.ml 2>&1

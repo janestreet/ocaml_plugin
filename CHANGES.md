@@ -1,3 +1,32 @@
+## 112.06.00
+
+- Stopped using the `~exclusive` with `Reader`, because it doesn't work
+  on read-only file systems.
+
+    It's not even needed because these files are written atomically.
+
+- Used a generative functor in the generated code, so the user code can
+  apply generative functors at toplevel, or unpack first class modules
+  that contain type components.
+- Fixed bug when mli file references something defined only in
+  another ml.
+- Made it possible to compile a plugin in one process, and dynload the
+  compiled `cmxs` file without starting async in another process.
+
+    This was done with two new APIs in `Ocaml_dynloader.S`:
+
+        val compile_ocaml_src_files_into_cmxs_file
+          : dynloader
+          -> string list
+          -> output_file:string
+          -> unit Deferred.Or_error.t
+
+        val blocking_load_cmxs_file : string -> t Or_error.t
+
+- Allowed plugins to optionally have a shebang line.
+- Made `Ocaml_dynloader.find_dependencies` also support files with
+  shebang lines.
+
 ## 112.01.00
 
 - Changed to not use `rm -r` when it is expected to remove one file.

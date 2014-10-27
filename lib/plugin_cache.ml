@@ -141,7 +141,7 @@ end = struct
     Unix.access pathname [ `Exists ] >>= function
     | Ok () -> begin
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-        Reader.load_sexp_exn ~exclusive:true pathname t_of_sexp
+        Reader.load_sexp_exn pathname t_of_sexp
       )
     end
     | Error _ ->
