@@ -64,3 +64,5 @@ happen. To create this standalone version of an exec
     $ ../bin/ocaml_embed_compiler.exe -exe ./run.exe -cc $(which ocamlopt) \
          dsl.cmi ../lib/ocaml_plugin.cmi $(ocamlopt -where)/pervasives.cmi \
          -o ./run-standalone.exe
+
+`opam` will install this executable as `ocaml-embed-compiler`.
