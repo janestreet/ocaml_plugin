@@ -47,11 +47,14 @@ let flags = Process_flag.all
 let endline std = if std = "" then std else std ^ "\n"
 ;;
 
-let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
+let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
+  let command_text =
+    lazy (prog::args |> <:sexp_of< string list >> |> Sexp.to_string)
+  in
   if !echo then
-    Printf.printf "Shell: %s %s\n%!" cmd (String.concat ~sep:" " args);
+    Printf.printf "Shell: %s\n%!" (force command_text);
 
-  Process.create ?working_dir ~prog:cmd ~args () >>=? fun process ->
+  Process.create ?working_dir ~prog ~args () >>=? fun process ->
     Process.wait process >>| fun output ->
     let { Process.Output.stdout ; stderr ; exit_status } = output in
 
@@ -84,10 +87,10 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) cmd args =
             (<:sexp_of< Core.Std.Unix.Exit_or_signal.error >> status)
           | None -> "error trace on stdout or stderr"
         in
-        sprintf "working_dir: %s\nstatus: %s\ncommand: %s %s\n%s%s"
+        sprintf "working_dir: %s\nstatus: %s\ncommand: %s\n%s%s"
           working_dir
           status
-          cmd (String.concat ~sep:" " args)
+          (force command_text)
           stdout
           (if stdout = "" then stderr else "\n"^stderr)
       ))

@@ -1,3 +1,41 @@
+## 112.17.00
+
+- Fixed spurious `interface mismatch` error when a plugin cache is
+  shared by incompatible compilers.
+
+  When a plugin cache directory is used by several executables with
+  incompatible cmis/compilers, and the cache config option
+  `try_old_cache_with_new_exec` is set to true, this could lead to the
+  following error:
+
+  ```ocaml
+  Plugin failed: (ocaml_dynloader.ml.Dynlink_error "interface mismatch")
+  ```
+
+  This feature fixes this.
+
+  Since it modifies some record, for later changes it seems easier and
+  more conservative to allow field additions without breaking older
+  version.  Thus we allow extra fields in persisted records.
+
+  ```ocaml
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+  ```
+
+  New executables can read both old and new caches, but old
+  executables will either blow away new caches, or if the config says
+  the cache is read-only, fail.
+
+  Take the chance to modernize part of the code.
+- Switched tests to unified tests.
+- Fixed bugs dealing with paths with spaces in them.
+- Check that plugins have the expected type before running them rather
+  than after, which is what one would expect.
+
+  Also check that runtime and compile types match in
+  `check_ocaml_src_files` and
+  `compile_ocaml_src_files_into_cmxs_file`.
+
 ## 112.06.00
 
 - Stopped using the `~exclusive` with `Reader`, because it doesn't work

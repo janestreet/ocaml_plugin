@@ -4,12 +4,14 @@ open Import
 
 module Build_info : sig
   type t with sexp
-  val equal : t -> t -> bool
-  val current : t
+  val is_current    : t -> bool
+  val current       : t
+  val not_available : t
 end = struct
   type t = Sexp.t with sexp
+  let not_available = <:sexp_of< string >> "(not available)"
   let current = Params.build_info_as_sexp
-  let equal = Sexp.equal
+  let is_current a = Sexp.equal current a
 end
 
 type filename = string with sexp, compare
@@ -59,14 +61,22 @@ module Sources = struct
 end
 
 module Plugin = struct
-  type t = {
-    cmxs_filename : filename; (* invariant: absolute *)
-    sources : Sources.t;
-    plugin_uuid : Plugin_uuid.t;
-  } with fields, sexp
+  type t =
+    { cmxs_filename : filename (* invariant: absolute *)
+    ; sources       : Sources.t
+    ; plugin_uuid   : Plugin_uuid.t
+    ; build_info    : Build_info.t with default(Build_info.not_available)
+    }
+  with fields, sexp
+
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
   let clean t =
     Shell.rm ~f:() [ t.cmxs_filename ]
+  ;;
+
+  let was_compiled_by_current_exec t =
+    Build_info.is_current t.build_info
   ;;
 end
 
@@ -79,10 +89,8 @@ module Info : sig
     -> t
 
   val plugins : t -> Plugin.t list
-  val build_info : t -> Build_info.t
 
   val empty : t
-  val is_empty : t -> bool
 
   val info_file_pathname : dir:string -> string
   val load : dir:string -> t Deferred.Or_error.t
@@ -92,30 +100,23 @@ module Info : sig
   val cache_dir_perm : int
 end = struct
 
-  type t = {
-    version: Sexp.t;
-    build_info : Build_info.t;
-    plugins : Plugin.t list;
-  } with sexp, fields
+  type t =
+    { version    : Sexp.t
+    ; build_info : Sexp.t
+    ; plugins    : Plugin.t list
+    }
+  with sexp, fields
 
-  let create
-      ~plugins
-      () =
-    let version = sexp_of_string Params.version in
-    let build_info = Build_info.current in
-    {
-      version;
-      build_info;
-      plugins;
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+
+  let create ~plugins () =
+    { version    = sexp_of_string Params.version
+    ; build_info = Params.build_info_as_sexp
+    ; plugins
     }
   ;;
 
-  let empty = create
-    ~plugins:[]
-    ()
-  ;;
-
-  let is_empty t = List.is_empty t.plugins
+  let empty = create ~plugins:[] ()
   ;;
 
   let cache_dir = "cmxs-cache"
@@ -150,29 +151,33 @@ end = struct
 end
 
 module Config = struct
-  let try_old_cache_with_new_exec_default = not Params.build_info_available
+  let try_old_cache_with_new_exec_default = false
 
   module V1 = struct
-    type t = {
-      dir: string;
-      max_files: int sexp_option;
-      readonly: bool;
-    } with fields, sexp
+    type t =
+      { dir       : string
+      ; max_files : int sexp_option
+      ; readonly  : bool
+      }
+    with fields, sexp
   end
   module V2 = struct
-    type t = {
-      dir: string;
-      max_files: int with default(10);
-      readonly: bool with default(false);
-      try_old_cache_with_new_exec : bool with default(try_old_cache_with_new_exec_default);
-    } with fields, sexp
-    let of_prev v1 =
-      {
-        dir = v1.V1.dir;
-        max_files = Option.value v1.V1.max_files ~default:10;
-        readonly = v1.V1.readonly;
-        try_old_cache_with_new_exec = try_old_cache_with_new_exec_default;
+    type t =
+      { dir       : string
+      ; max_files : int with default(10)
+      ; readonly  : bool with default(false)
+      ; try_old_cache_with_new_exec : bool
+        with default(try_old_cache_with_new_exec_default)
       }
+    with fields, sexp
+    let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+    let of_prev v1 =
+      { dir = v1.V1.dir
+      ; max_files = Option.value v1.V1.max_files ~default:10
+      ; readonly = v1.V1.readonly
+      ; try_old_cache_with_new_exec = try_old_cache_with_new_exec_default
+      }
+    ;;
   end
   module V = struct
     type t =
@@ -203,32 +208,27 @@ module Config = struct
       ?(readonly=false)
       ?(try_old_cache_with_new_exec=try_old_cache_with_new_exec_default)
       () =
-    {
-      dir;
-      max_files;
-      readonly;
-      try_old_cache_with_new_exec;
+    { dir
+    ; max_files
+    ; readonly
+    ; try_old_cache_with_new_exec
     }
   ;;
 end
 
 module State = struct
 
-  type t = {
-    config : Config.t;
-    mutable has_write_lock : bool;
-    mutable index : int;
-    mutable old_cache_with_new_exec : bool;
-    (* This field is true when the build info of the cache doesn't match and the config
-       allows this option. But if the cache has the right build info, then this field
-       stays false so that we don't try recompiling needlessly. *)
-    mutable old_files_deleted : bool;
-    table : (int * Plugin.t) Key.Table.t;
+  type t =
+    { config                          : Config.t
+    ; mutable has_write_lock          : bool
+    ; mutable index                   : int
+    ; mutable old_files_deleted       : bool
+    ; table                           : (int * Plugin.t) Key.Table.t
     (* At any given time (except maybe on startup and when the cache is readonly), the
        index in the table should be in [index - maxfiles, index[. [clean_old] is the one
        removing the old cmxs' from the table and from the filesystem. *)
-    deprecated_plugins : Plugin.t Queue.t;
-  }
+    ; deprecated_plugins              : Plugin.t Queue.t
+    }
 
   exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of
       string * Error.t with sexp
@@ -295,32 +295,21 @@ module State = struct
            existing cmxs files and then proceed as if there was no cache. *)
         reset_cache_if_writable Info.empty
     | Ok info ->
-      if (Params.build_info_available
-          && Build_info.equal Build_info.current (Info.build_info info))
-        || Info.is_empty info
-        || (
-          if Config.try_old_cache_with_new_exec t.config
-          then (t.old_cache_with_new_exec <- true ; true)
-          else false
-        )
-      then
-        (* filtering the plugin if the file is available *)
-        let iter plugin =
-          Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
-          | Ok () ->
-            let index = t.index in
-            t.index <- succ index;
-            let sources = Plugin.sources plugin in
-            let key = Sources.key sources in
-            Key.Table.set t.table ~key ~data:(index, plugin);
-            Deferred.return ()
-          | Error _ ->
-            Deferred.return ()
-        in
-        Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
-        Ok ()
-      else
-        reset_cache_if_writable info
+      (* filtering the plugin if the file is available *)
+      let iter plugin =
+        Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
+        | Ok () ->
+          let index = t.index in
+          t.index <- succ index;
+          let sources = Plugin.sources plugin in
+          let key = Sources.key sources in
+          Key.Table.set t.table ~key ~data:(index, plugin);
+          Deferred.return ()
+        | Error _ ->
+          Deferred.return ()
+      in
+      Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
+      Ok ()
   ;;
 
   let create config =
@@ -329,18 +318,17 @@ module State = struct
     Shell.absolute_pathname (Config.dir config) >>=? fun config_dir ->
     let deprecated_plugins = Queue.create () in
     let config = { config with Config.dir = config_dir } in
-    let old_cache_with_new_exec = false in
     let old_files_deleted = false in
     let has_write_lock = false in
-    let state = {
-      index;
-      old_cache_with_new_exec;
-      old_files_deleted;
-      config;
-      has_write_lock;
-      table;
-      deprecated_plugins;
-    } in
+    let state =
+      { index
+      ; old_files_deleted
+      ; config
+      ; has_write_lock
+      ; table
+      ; deprecated_plugins
+      }
+    in
     load_info state >>=? fun () ->
     Deferred.return (Ok state)
   ;;
@@ -386,11 +374,15 @@ module State = struct
     let key = Sources.key sources in
     let table = t.table in
     match Key.Table.find table key with
+    | None -> None
     | Some (_, plugin) ->
       let plugin_sources = Plugin.sources plugin in
       if Sources.(=) plugin_sources sources
       then
-        Some plugin
+        if Plugin.was_compiled_by_current_exec plugin
+        || Config.try_old_cache_with_new_exec t.config
+        then Some plugin
+        else None
       else (
         (* This cache is now invalid, we should remove the file but this is very likely
            that a 'add' will be called, and we prefer writing the info file only once.
@@ -403,8 +395,6 @@ module State = struct
         Key.Table.remove table key;
         None
       )
-    | None ->
-      None
   ;;
 
   let add t sources plugin_uuid filename =
@@ -417,12 +407,13 @@ module State = struct
       let cmxs_filename = dir ^/ (Uuid.to_string uuid) ^ ".cmxs" in
       Shell.cp ~source:filename ~dest:cmxs_filename >>=? fun () ->
       Shell.chmod cmxs_filename ~perm:Info.cache_dir_perm >>=? fun () ->
-      let plugin = {
-        Plugin.
-        sources;
-        plugin_uuid;
-        cmxs_filename;
-      } in
+      let plugin : Plugin.t =
+        { sources
+        ; plugin_uuid
+        ; cmxs_filename
+        ; build_info = Build_info.current
+        }
+      in
       let index = t.index in
       t.index <- succ index;
       Key.Table.set t.table ~key ~data:(index, plugin);
@@ -452,7 +443,4 @@ let digest files =
   Deferred.Or_error.List.map ~how:`Parallel files ~f:(fun file ->
     Digest.file file >>|? (fun digest -> file, digest)
   )
-;;
-
-let old_cache_with_new_exec t = t.old_cache_with_new_exec
 ;;

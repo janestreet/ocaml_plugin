@@ -276,13 +276,10 @@ module type S = sig
       It is worth noting too that this function only works with cmxs files produced by
       ocaml_plugin's [compile_ocaml_src_files_into_cmxs_file]. It expects the code to
       perform some internal library calls, thus it cannot be used with any arbitrary cmxs
-      compiled in some other way.
-
-      Be aware that if you load a cmxs file that was built by the function
-      [compile_ocaml_src_files_into_cmxs_file] from a different module [S], you would get
-      an [Error] value because the type of the first class module types won't match. But
-      the code would still be executed, that is top level side effects of the given cmxs
-      would be executed even though the function returns an error *)
+      compiled in some other way. Furthermore this function would return an error even
+      though the cmxs was built with ocaml_plugin when built under a different context
+      (compiler version used, cmi dependencies version, etc.)  The intended usage is to
+      have the compilation and loading done using the same executable. *)
   val blocking_load_cmxs_file : string -> t Or_error.t
 end
 

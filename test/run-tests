@@ -1,0 +1,21 @@
+#!/bin/bash
+
+
+function matches {
+    stdin="$(cat /dev/stdin)"
+    if echo "$stdin" | tr '\n' ' ' | grep -q "$@"; then
+        :
+    else
+        echo "$stdin"
+    fi
+}
+export -f matches
+
+function setup {
+    set -o pipefail
+}
+export -f setup
+
+export TEST_DIR="$(readlink -f $(dirname "$0"))"
+cd "$TEST_DIR"
+../../../external/unified-tests/run-tests.sh "$@"

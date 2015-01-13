@@ -9,28 +9,32 @@ let index = ref 0
 ;;
 
 module Config = struct
-  type t = {
-    pa_files : string list ;
-  } with sexp
+  type t =
+    { pa_files : string list
+    }
+  with sexp
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 end
 
 (* every t has a different compilation directory *)
-type t = {
-  mutable cleaned : bool;
-  cmx_flags : string list;
-  cmxs_flags : string list;
-  trigger_unused_value_warnings_despite_mli : bool;
-  compilation_config : (string * Config.t option) Or_error.t Lazy_deferred.t;
-  include_directories : string list;
-  ocamlopt_opt : string;
-  camlp4o_opt : string;
-  ocamldep_opt : string;
-  pa_files : string list; (* Usually contains explicit provided preprocessors. The ones
-                             from the config will be added right before generating the
-                             command lines *)
-  cache : Plugin_cache.t Or_error.t Lazy_deferred.t option;
-  run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ];
-} with fields
+type t =
+  { mutable cleaned     : bool
+  ; cmx_flags           : string list
+  ; cmxs_flags          : string list
+  ; trigger_unused_value_warnings_despite_mli : bool
+  ; compilation_config  : (string * Config.t option) Or_error.t Lazy_deferred.t
+  ; include_directories : string list
+  ; ocamlopt_opt        : string
+  ; camlp4o_opt         : string
+  ; ocamldep_opt        : string
+  ; pa_files            : string list
+  (* Usually contains explicit provided preprocessors. The ones
+     from the config will be added right before generating the
+     command lines *)
+  ; cache               : Plugin_cache.t Or_error.t Lazy_deferred.t option
+  ; run_plugin_toplevel : [ `In_async_thread | `Outside_of_async ]
+  }
+with fields
 
 type dynloader = t
 
@@ -58,31 +62,33 @@ module Compilation_config = struct
       save some debug info in the builddir in case this doesn't get cleaned
     *)
 
-    type t = {
-      login : string;
-      hostname : string;
-      pid : Pid.t;
-      sys_argv : string array;
-      version : string;
-      build_info : string;
-    } with sexp_of
+    type t =
+      { login      : string
+      ; hostname   : string
+      ; pid        : Pid.t
+      ; sys_argv   : string array
+      ; version    : string
+      ; build_info : Sexp.t
+      }
+    with sexp_of
 
     let create () =
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         let hostname = Unix.gethostname () in
         let pid = Unix.getpid () in
-        let build_info = Params.build_info in
+        let build_info = Params.build_info_as_sexp in
         let version = Params.version in
         let sys_argv = Sys.argv in
         Unix.getlogin () >>| fun login ->
-        let t = {
-          login;
-          hostname;
-          pid;
-          build_info;
-          version;
-          sys_argv;
-        } in
+        let t =
+          { login
+          ; hostname
+          ; pid
+          ; build_info
+          ; version
+          ; sys_argv
+          }
+        in
         sexp_of_t t
       )
     ;;
@@ -180,19 +186,18 @@ let create
   in
   let cleaned = false in
   let t =
-    {
-      cleaned;
-      cmx_flags;
-      cmxs_flags;
-      trigger_unused_value_warnings_despite_mli;
-      compilation_config;
-      include_directories;
-      ocamlopt_opt;
-      camlp4o_opt;
-      ocamldep_opt;
-      pa_files;
-      cache;
-      run_plugin_toplevel;
+    { cleaned
+    ; cmx_flags
+    ; cmxs_flags
+    ; trigger_unused_value_warnings_despite_mli
+    ; compilation_config
+    ; include_directories
+    ; ocamlopt_opt
+    ; camlp4o_opt
+    ; ocamldep_opt
+    ; pa_files
+    ; cache
+    ; run_plugin_toplevel
     } in
   Deferred.return (Ok t)
 ;;
@@ -256,13 +261,13 @@ exception No_file_to_compile with sexp
 exception Dynlink_error of string with sexp
 
 exception Plugin_did_not_return with sexp
-exception Return_plugin of (unit -> Univ.t)
+type packed_plugin = E : 'a Univ_constr.t * (unit -> 'a) -> packed_plugin
+exception Return_plugin of packed_plugin
 
 ;;
 
 let return_plugin (type a) (constr : a Univ_constr.t) (fct : unit -> a) =
-  let fct () = Univ.create constr (fct ()) in
-  raise (Return_plugin fct)
+  raise (Return_plugin (E (constr, fct)))
 ;;
 
 let preprocess_shebang ~first_line =
@@ -281,18 +286,18 @@ module Compile : sig
 
   val blocking_dynlink :
     ?export:bool
-    -> string -> (unit -> Univ.t) Or_error.t
+    -> string -> packed_plugin Or_error.t
 
   val dynlink :
     ?export:bool
-    -> string -> (unit -> Univ.t) Deferred.Or_error.t
+    -> string -> packed_plugin Deferred.Or_error.t
 
   val compile_and_load_file :
     working_dir:string
     -> t
     -> ?export:bool
     -> basename:Core.Std.String.Hash_set.elt
-    -> (string * (unit -> Univ.t)) Async.Std.Deferred.Or_error.t
+    -> (string * packed_plugin) Async.Std.Deferred.Or_error.t
 
 end = struct
 
@@ -414,7 +419,7 @@ end = struct
     with
     | Dynlink.Error e ->
       raise (Dynlink_error (Dynlink.error_message e))
-    | Return_plugin univ -> univ
+    | Return_plugin packed_plugin -> packed_plugin
   ;;
 
   let dynlink ?export cmxs_filename =
@@ -439,11 +444,13 @@ end = struct
       let f dir = [ "-I" ; dir ] in
       List.concat_map ~f t.include_directories
     in
-    let pp_args = match t.pa_files with
+    let pp_args =
+      match t.pa_files with
       | [] -> []
       | cmxs ->
         [ "-pp" ;
-          String.concat (t.camlp4o_opt :: include_directories @ cmxs) ~sep:" "
+          String.concat ~sep:" " (List.map ~f:Filename.quote (
+            t.camlp4o_opt :: include_directories @ cmxs))
         ]
     in
     let create_cmx_args =
@@ -464,8 +471,8 @@ end = struct
     Shell.run ~quiet_or_error:true ~working_dir t.ocamlopt_opt create_cmxs_args
     >>=? fun () ->
     let cmxs = working_dir ^/ cmxs in
-    dynlink ?export cmxs >>|? fun univ ->
-    cmxs, univ
+    dynlink ?export cmxs >>|? fun packed_plugin ->
+    cmxs, packed_plugin
   ;;
 end
 
@@ -519,7 +526,8 @@ let find_dependencies t filename =
           List.concat_map ~f (base_dir :: t.include_directories)
         in
         [ "-pp" ;
-          String.concat (in_base_dir t.camlp4o_opt :: include_directories @ cmxs) ~sep:" "
+          String.concat ~sep:" " (List.map ~f:Filename.quote (
+            in_base_dir t.camlp4o_opt :: include_directories @ cmxs))
         ]
     in
     (* we create a new directory under [base_dir] as ocamldep's working directory, when
@@ -566,24 +574,29 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
   Shell.absolute_pathnames filenames >>=? fun filenames ->
   Ml_bundle.from_filenames filenames >>=? fun ml_bundles ->
   match t.cache with
-  | None -> compile_without_cache ml_bundles >>|? fun (_, (cmxs_filename, univ)) ->
-    `cmxs_filename cmxs_filename, univ
+  | None -> compile_without_cache ml_bundles >>|? fun (_, (cmxs_filename, packed_plugin)) ->
+    `cmxs_filename cmxs_filename, packed_plugin
   | Some cache ->
     Lazy_deferred.force_exn cache >>=? fun cache ->
     Plugin_cache.digest ml_bundles >>=? fun sources ->
     let refresh_cache () =
-      compile_without_cache ml_bundles >>=? fun (plugin_uuid, (cmxs_filename, univ)) ->
+      compile_without_cache ml_bundles >>=? fun (plugin_uuid, (cmxs_filename, packed_plugin)) ->
       Plugin_cache.add cache sources plugin_uuid cmxs_filename >>|? fun () ->
-      `cmxs_filename cmxs_filename, univ
+      `cmxs_filename cmxs_filename, packed_plugin
     in
     match Plugin_cache.find cache sources with
     | Some plugin -> begin
       let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
       Compile.dynlink cmxs_filename >>= function
-      | Ok univ -> Deferred.Or_error.return (`cmxs_filename cmxs_filename, univ)
+      | Ok packed_plugin -> Deferred.Or_error.return (`cmxs_filename cmxs_filename, packed_plugin)
       | Error _ as error ->
-        if Plugin_cache.old_cache_with_new_exec cache
-        then
+        if Plugin_cache.Plugin.was_compiled_by_current_exec plugin then
+          (* Rebuilding the cmxs from scratch would lead to the exact same file since we
+             have the same exec that the one that was used to build the same
+             sources. Thus, the result of the dynlink would the same anyway, something
+             else should be wrong. *)
+          Deferred.return error
+        else
           (* In that case, since the exec has changed since the last time it was used to
              build this cache, we might have a chance that dynlinking a freshly rebuilt
              cmxs file would actually succeed.
@@ -591,12 +604,6 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
              toplevel, we will go through this branch and recompile it a second time. It
              is probably fine though. *)
           refresh_cache ()
-        else
-          (* Rebuilding the cmxs from scratch would lead to the exact same file since we
-             have the same exec that the one that was used to build the same
-             sources. Thus, the result of the dynlink would the same anyway, something
-             else should be wrong. *)
-          Deferred.return error
     end
     | None -> refresh_cache ()
 ;;
@@ -622,29 +629,36 @@ end
 
 module Make (X:Module_type) =
 struct
-  let load_ocaml_src_files_without_running_them t filenames =
-    let repr = Plugin_uuid.Repr.create ~t:X.t_repr ~univ_constr:X.univ_constr_repr in
-    load_ocaml_src_files_plugin_uuid ~repr t filenames
-  ;;
 
-  let run make_plugin =
+  let type_check plugin_type =
     (* There is an hidden invariant there: if the OCaml compilation succeed, that means
        that the loaded module has the type represented in X.repr, so the [Univ.match_]
        will succeed. Of course this is only true is the user gave a valid Module_type in
        the first place. *)
-    try begin
-      let univ = make_plugin () in
-      match Univ.match_ univ X.univ_constr with
-      | Some plugin -> Ok plugin
-      | None ->
-        Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
-    end with exn ->
+    match Type_equal.Id.same_witness plugin_type X.univ_constr with
+    | None -> Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
+    | Some witness -> Ok witness
+  ;;
+
+  let load_and_type_ocaml_src_files_without_running_them t filenames =
+    let repr = Plugin_uuid.Repr.create ~t:X.t_repr ~univ_constr:X.univ_constr_repr in
+    load_ocaml_src_files_plugin_uuid ~repr t filenames
+    >>=? fun (cmxs_filename, E (plugin_type, make_plugin)) ->
+    return (
+      match type_check plugin_type with
+      | Error _ as e -> e
+      | Ok Type_equal.T -> Ok (cmxs_filename, (make_plugin : unit -> X.t)))
+  ;;
+
+  let run make_plugin =
+    try Ok (make_plugin ())
+    with exn ->
       Or_error.tag (Or_error.of_exn exn)
         "Exception while executing the plugin's toplevel"
   ;;
 
   let load_ocaml_src_files t filenames =
-    load_ocaml_src_files_without_running_them t filenames
+    load_and_type_ocaml_src_files_without_running_them t filenames
     >>=? fun (`cmxs_filename _, make_plugin) ->
     match t.run_plugin_toplevel with
     | `In_async_thread  -> Deferred.return (run make_plugin)
@@ -652,24 +666,29 @@ struct
   ;;
 
   let check_ocaml_src_files t filenames =
-    load_ocaml_src_files_without_running_them t filenames
-    >>|? fun (`cmxs_filename (_ : string), (_ : unit -> Univ.t)) ->
+    load_and_type_ocaml_src_files_without_running_them t filenames
+    >>|? fun (`cmxs_filename (_ : string), (_ : unit -> X.t)) ->
     ()
   ;;
 
   let compile_ocaml_src_files_into_cmxs_file t filenames ~output_file =
-    load_ocaml_src_files_without_running_them t filenames
-    >>=? fun (`cmxs_filename cmxs_filename, (_ : unit -> Univ.t)) ->
+    load_and_type_ocaml_src_files_without_running_them t filenames
+    >>=? fun (`cmxs_filename cmxs_filename, (_ : unit -> X.t)) ->
     Shell.cp ~source:cmxs_filename ~dest:output_file
   ;;
 
-  let blocking_load_cmxs_file cmxs_filename =
+  let blocking_load_cmxs_file cmxs_filename : X.t Or_error.t =
     if not (Scheduler.is_ready_to_initialize ())
     then Or_error.error_string
            "blocking_load_cmxs_file can only be called \
             when Async scheduler isn't initialized"
     else
-      Or_error.bind (Compile.blocking_dynlink cmxs_filename) run
+      match Compile.blocking_dynlink cmxs_filename with
+      | Error _ as e -> e
+      | Ok (E (plugin_type, make_plugin)) ->
+        match type_check plugin_type with
+        | Error _ as e -> e
+        | Ok Type_equal.T -> run make_plugin
   ;;
 end
 
