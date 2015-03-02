@@ -92,36 +92,35 @@ module Flags = struct
     anon (sequence ("<ocaml-file>" %: file))
 end
 
-let summary = "unit test program for ocaml-plugin"
-
 let command =
-  Command.(async ~summary Spec.(
-    empty
-    +> Flags.use_cache ()
-    +> Flags.persistent_archive ()
-    +> Flags.trigger_unused_value_warnings_despite_mli ()
-    +> Flags.run_plugin_toplevel ()
-    +> Flags.find_dependencies ()
-    +> Flags.anon_files ()
-  )) (fun
-    use_cache
-    persistent_archive_dirpath
-    trigger_unused_value_warnings_despite_mli
-    run_plugin_toplevel
-    find_dependencies
-    files
-    ()
-  ->
-    Deferred.List.iter ~how:`Sequential (groups files) ~f:(
-      run
-        ?use_cache
-        ?persistent_archive_dirpath
-        ~trigger_unused_value_warnings_despite_mli
-        ~run_plugin_toplevel
-        ~find_dependencies
-    ) >>= fun () ->
-    return (Shutdown.shutdown 0)
-  )
+  Command.async ~summary:"unit test program for ocaml-plugin"
+    Command.Spec.(
+      empty
+      +> Flags.use_cache ()
+      +> Flags.persistent_archive ()
+      +> Flags.trigger_unused_value_warnings_despite_mli ()
+      +> Flags.run_plugin_toplevel ()
+      +> Flags.find_dependencies ()
+      +> Flags.anon_files ()
+    ) (fun
+      use_cache
+      persistent_archive_dirpath
+      trigger_unused_value_warnings_despite_mli
+      run_plugin_toplevel
+      find_dependencies
+      files
+      ()
+    ->
+      Deferred.List.iter ~how:`Sequential (groups files) ~f:(
+        run
+          ?use_cache
+          ?persistent_archive_dirpath
+          ~trigger_unused_value_warnings_despite_mli
+          ~run_plugin_toplevel
+          ~find_dependencies
+      ) >>= fun () ->
+      return (Shutdown.shutdown 0)
+    )
 
 let () =
   Exn.handle_uncaught ~exit:true (fun () -> Command.run command)

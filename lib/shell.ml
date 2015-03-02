@@ -55,7 +55,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
     Printf.printf "Shell: %s\n%!" (force command_text);
 
   Process.create ?working_dir ~prog ~args () >>=? fun process ->
-    Process.wait process >>| fun output ->
+    Process.collect_output_and_wait process >>| fun output ->
     let { Process.Output.stdout ; stderr ; exit_status } = output in
 
     let error_and_status =

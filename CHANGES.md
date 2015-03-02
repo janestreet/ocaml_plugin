@@ -1,3 +1,7 @@
+## 112.24.00
+
+Minor update: follow Async evolution.
+
 ## 112.17.00
 
 - Fixed spurious `interface mismatch` error when a plugin cache is
