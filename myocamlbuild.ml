@@ -10,7 +10,7 @@ let dispatch = function
     let env = BaseEnvLight.load () in
     let stdlib = BaseEnvLight.var_get "standard_library" env in
     rule "ocaml_plugin standalone archive"
-      ~deps:["lib/ocaml_plugin.cmi";
+      ~deps:["src/ocaml_plugin.cmi";
              "sample/dsl.cmi";
              "hello_world/plugin_intf.cmi";
              "bin/ocaml_embed_compiler.native"]
@@ -27,7 +27,7 @@ let dispatch = function
                 A (loc "core" / "core.cmi");
                 A (loc "fieldslib" / "fieldslib.cmi");
                 A (loc "sexplib" / "sexplib.cmi");
-                A "lib/ocaml_plugin.cmi";
+                A "src/ocaml_plugin.cmi";
                 A "sample/dsl.cmi";
                 A "hello_world/plugin_intf.cmi";
                 A "-o"; A "bin/ocaml_sample_archive.c"]))

@@ -16,7 +16,7 @@ XStdFilesREADME:  false
 BuildTools:       ocamlbuild, camlp4o
 
 Library ocaml_plugin
-  Path:               lib
+  Path:               src
   FindlibName:        ocaml_plugin
   Pack:               true
   Modules:            Import,
