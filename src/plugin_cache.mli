@@ -15,7 +15,7 @@ open Core.Std
 open Async.Std
 
 (**
-   Mutable type containing informations about the cached files.
+   Mutable type containing information about the cached files.
 *)
 type t
 

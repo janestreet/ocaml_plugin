@@ -9,6 +9,11 @@ open Async.Std
    apart from Make to create a dedicated Plugin loader.
 *)
 
+(** See the labelled argument [custom_warnings_spec] for what these are for. *)
+val default_disabled_warnings : int list
+val warnings_spec : disabled_warnings:int list -> string
+val default_warnings_spec : string
+
 module Config : sig
   type t = {
     pa_files : string list ;
@@ -64,14 +69,14 @@ type 'a create_arguments =
 
   -> ?custom_warnings_spec:string
   (**
-     When one use this library, warnings are always triggered as errors. This flag allows
-     one to change the warning activated and is passed to the compiler using the flag [-w]
-     followed by the string provided :
+     Defaults to [default_warnings_spec].
+
+     When one uses this library, warnings are always triggered as errors. This flag allows
+     one to change the warnings enabled and is passed to the compiler this way:
      [-w $(custom_warnings_spec) -warn-error +a]
 
-     By default, the common warnings are activated: "@a-4-29"
-     If you want to specify the warning specification yourself, use this flag.
-     The format of the string is documented by ocamlopt -help. e.g. "+a-4-7-9-29-28"
+     Custom warnings specifications can be built with [default_ignored_warnings] and
+     [warnings_spec].
   *)
 
   -> ?strict_sequence:bool

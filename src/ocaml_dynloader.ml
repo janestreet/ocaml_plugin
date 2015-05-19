@@ -1,8 +1,19 @@
 open Core.Std
 open Async.Std
 
+let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48]
+;;
+
 (* The default policy about warnings *)
-let default_warnings_spec = "@a-4-29-40-41-42-44-45-48"
+let warnings_spec ~disabled_warnings =
+  let ignores =
+    List.map disabled_warnings ~f:(fun i -> "-" ^ Int.to_string i)
+    |> String.concat
+  in
+  "+a" ^ ignores
+;;
+
+let default_warnings_spec = warnings_spec ~disabled_warnings:default_disabled_warnings
 ;;
 
 let index = ref 0
@@ -325,7 +336,11 @@ end = struct
   let ocaml_plugin_gen_sig_prefix = "OCAML_PLUGIN__sig_"
   ;;
 
-  let copy_files ~trigger_unused_value_warnings_despite_mli ~working_dir plugin_uuid =
+  let copy_files
+    ~trigger_unused_value_warnings_despite_mli
+    ~working_dir
+    plugin_uuid
+  =
     let fct () =
       let repr = Plugin_uuid.repr plugin_uuid in
       let with_bundle out_channel bundle =
@@ -482,8 +497,12 @@ exception Usage_of_cleaned_dynloader with sexp
 let copy_source_files_to_working_dir ~source_dir ~working_dir =
   Deferred.Or_error.try_with (fun () ->
     Sys.ls_dir source_dir >>| List.filter ~f:(fun file ->
-      String.is_suffix file ~suffix:".ml"
-      || String.is_suffix file ~suffix:".mli"
+      (* We filter out some files created by emacs with names like ".#fool.ml" that we
+         would fail to read because they are dead symlinks. *)
+      not (String.is_prefix file ~prefix:".")
+      &&  (   String.is_suffix file ~suffix:".ml"
+           || String.is_suffix file ~suffix:".mli"
+          )
     ) >>= fun all_ocaml_files ->
     Deferred.List.iter all_ocaml_files ~f:(fun file ->
       let source_file_name = source_dir ^/ file in

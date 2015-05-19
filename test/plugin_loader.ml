@@ -56,10 +56,12 @@ let groups l =
     | _ -> true
   ))
 
-let use_cache =
+let max_files_default = 2
+
+let use_cache ~max_files =
   Plugin_cache.Config.create
     ~dir:"cache"
-    ~max_files:2
+    ~max_files
     ~readonly:false
     ~try_old_cache_with_new_exec:true
     ()
@@ -69,6 +71,10 @@ module Flags = struct
   let use_cache () =
     map ~f:(fun b -> if b then Some use_cache else None)
       (flag "--cache" no_arg ~doc:" use a plugin cache")
+
+  let cache_size () =
+    flag "--cache-size" (optional_with_default max_files_default int)
+      ~doc:(sprintf " specify size of plugin cache. default %d" max_files_default)
 
   let persistent_archive () =
     map ~f:(fun b -> if b then Some "cache" else None)
@@ -96,7 +102,10 @@ let command =
   Command.async ~summary:"unit test program for ocaml-plugin"
     Command.Spec.(
       empty
+      ++ step (fun m use_cache cache_size ->
+        m (Option.map use_cache ~f:(fun f -> f ~max_files:cache_size)))
       +> Flags.use_cache ()
+      +> Flags.cache_size ()
       +> Flags.persistent_archive ()
       +> Flags.trigger_unused_value_warnings_despite_mli ()
       +> Flags.run_plugin_toplevel ()

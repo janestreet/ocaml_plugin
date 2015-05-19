@@ -1,3 +1,12 @@
+## 112.35.00
+
+- In `copy_source_files_to_working_dir`, exclude files that start with
+  a dot.
+
+    emacs creates temporary files that cannot be read with names like
+    `.#foo.ml`, and attempting to copy those causes this function to
+    fail.
+
 ## 112.24.00
 
 Minor update: follow Async evolution.

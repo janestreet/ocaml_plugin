@@ -15,6 +15,7 @@ end = struct
 end
 
 type filename = string with sexp, compare
+type basename = string with sexp, compare
 
 let parallel list ~f =
   Deferred.Or_error.List.iter ~how:`Parallel list ~f
@@ -42,22 +43,19 @@ end
 
 module Key = struct
   module T = struct
-    type t = filename list with sexp, compare
+    type t = (basename * Digest.t) list with sexp, compare
     let hash = Hashtbl.hash
   end
   include T
   include Hashable.Make (T)
+
+  let of_sources sources =
+    List.map sources ~f:(fun (filename, digest) -> Filename.basename filename, digest)
+  ;;
 end
 
 module Sources = struct
-  type elt = filename * Digest.t with sexp, compare
-  type t = elt list with sexp, compare
-
-  let (=) a b = compare_t a b = 0
-  ;;
-
-  let key t = List.map ~f:fst t
-  ;;
+  type t = (filename * Digest.t) list with sexp
 end
 
 module Plugin = struct
@@ -79,6 +77,68 @@ module Plugin = struct
     Build_info.is_current t.build_info
   ;;
 end
+
+module Make_count_by (M : sig
+    val of_sources : Sources.t -> string list
+  end) : sig
+
+  module Key : sig
+    type t
+    val of_sources : Sources.t -> t
+  end
+
+  type t
+
+  val create : unit -> t
+
+  val incr : t -> Key.t -> unit
+  val decr : t -> Key.t -> unit
+  val find : t -> Key.t -> int
+end = struct
+
+  module Key = struct
+    module T = struct
+      type t = string list with sexp, compare
+      let hash = Hashtbl.hash
+    end
+    include T
+    include Hashable.Make (T)
+
+    let of_sources = M.of_sources
+  end
+
+  type t = int Key.Table.t
+
+  let create () = Key.Table.create ()
+
+  let incr table key =
+    Hashtbl.change table key (fun value ->
+      Some (succ (Option.value value ~default:0)))
+  ;;
+
+  let decr table key =
+    Hashtbl.change table key (function
+      | None -> None
+      | Some x when x <= 1 -> None
+      | Some x -> Some (pred x))
+  ;;
+
+  let find table key =
+    Option.value (Hashtbl.find table key) ~default:0
+  ;;
+end
+
+module Count_by_basenames = Make_count_by(struct
+    let of_sources sources =
+      List.map sources ~f:(fun (filename, _digest) ->
+        Filename.basename filename)
+    ;;
+  end)
+
+module Count_by_filenames = Make_count_by(struct
+    let of_sources sources = List.map sources ~f:fst
+  end)
+;;
 
 module Info : sig
   type t with sexp_of
@@ -218,20 +278,106 @@ end
 
 module State = struct
 
+  module Plugin_in_table = struct
+    type t =
+      { creation_num : int
+      ; plugin       : Plugin.t
+      ; basenames    : Count_by_basenames.Key.t
+      ; filenames    : Count_by_filenames.Key.t
+      ; key          : Key.t
+      }
+    with fields
+
+    let older_first t1 t2 = Int.compare t1.creation_num t2.creation_num
+  end
+
   type t =
-    { config                          : Config.t
-    ; mutable has_write_lock          : bool
-    ; mutable index                   : int
-    ; mutable old_files_deleted       : bool
-    ; table                           : (int * Plugin.t) Key.Table.t
-    (* At any given time (except maybe on startup and when the cache is readonly), the
-       index in the table should be in [index - maxfiles, index[. [clean_old] is the one
-       removing the old cmxs' from the table and from the filesystem. *)
-    ; deprecated_plugins              : Plugin.t Queue.t
+    { config                       : Config.t
+    ; mutable has_write_lock       : bool
+    ; mutable next_creation_num    : int
+    ; mutable old_files_deleted    : bool
+    ; table                        : Plugin_in_table.t Key.Table.t
+    ; num_plugins_by_basenames     : Count_by_basenames.t
+    ; num_plugins_by_filenames     : Count_by_filenames.t
     }
 
   exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of
       string * Error.t with sexp
+
+  let there_is_more_plugins_with_same what t p1 p2 =
+    let num_plugins_with_same what t (p : Plugin_in_table.t) =
+      match what with
+      | `Basenames -> Count_by_basenames.find t.num_plugins_by_basenames p.basenames
+      | `Filenames -> Count_by_filenames.find t.num_plugins_by_filenames p.filenames
+    in
+    Int.compare
+      (num_plugins_with_same what t p2)
+      (num_plugins_with_same what t p1)
+  ;;
+
+  let priority_heuristic_to_clean_plugins t =
+    Comparable.lexicographic
+      [ there_is_more_plugins_with_same `Filenames t
+      ; there_is_more_plugins_with_same `Basenames t
+      ; Plugin_in_table.older_first
+      ]
+  ;;
+
+  let remove_internal t key =
+    match Hashtbl.find_and_remove t.table key with
+    | None -> ()
+    | Some plugin ->
+      Count_by_basenames.decr t.num_plugins_by_basenames plugin.basenames;
+      Count_by_filenames.decr t.num_plugins_by_filenames plugin.filenames;
+  ;;
+
+  let get_and_clear_plugins_to_remove t =
+    (* In practice this function is called each time we add a new plugin, so as soon as we
+       reach the max capacity, which means the loop runs only once, in O(n).  In rare
+       cases this might run several times in case a old plugin cache was loaded after
+       decreasing the max values.  We tried as well an approach where we maintain a heap
+       on addition incrementally but the code was more complex. *)
+    let get_one t =
+      let fold_data table ~init ~f =
+        Hashtbl.fold table ~init ~f:(fun ~key:_ ~data acc -> f acc data)
+      in
+      Container.fold_min fold_data t.table
+        ~cmp:(priority_heuristic_to_clean_plugins t)
+    in
+    let max_plugins = max 0 t.config.max_files in
+    let rec loop acc =
+      if Hashtbl.length t.table <= max_plugins
+      then acc
+      else
+        match get_one t with
+        | None -> acc
+        | Some plugin ->
+          remove_internal t plugin.key;
+          loop (plugin :: acc)
+    in
+    loop []
+  ;;
+
+  let add_plugin_internal t (plugin : Plugin.t) =
+    let sources = plugin.sources in
+    let key = Key.of_sources sources in
+    let basenames = Count_by_basenames.Key.of_sources sources in
+    let filenames = Count_by_filenames.Key.of_sources sources in
+    let plugin_in_table : Plugin_in_table.t =
+      let creation_num = t.next_creation_num in
+      t.next_creation_num <- succ creation_num;
+      { plugin
+      ; creation_num
+      ; basenames
+      ; filenames
+      ; key
+      }
+    in
+    remove_internal t key;
+    Hashtbl.set t.table ~key ~data:plugin_in_table;
+    Count_by_basenames.incr t.num_plugins_by_basenames basenames;
+    Count_by_filenames.incr t.num_plugins_by_filenames filenames;
+  ;;
 
   let del_cmxs path filename =
     if Filename.check_suffix filename "cmxs" then
@@ -241,8 +387,14 @@ module State = struct
   ;;
 
   let info t =
-    let plugins = Key.Table.data t.table in
-    let plugins = List.rev_map ~f:snd plugins in
+    let plugins =
+      (* When creating the info the list is ordered from old to new so that when we
+         deserialize the info, [creation_num] fields are assigned in the same order then
+         before serialization. *)
+      Hashtbl.data t.table
+      |> List.sort ~cmp:Plugin_in_table.older_first
+      |> List.map ~f:Plugin_in_table.plugin
+    in
     Info.create ~plugins ()
   ;;
 
@@ -297,36 +449,24 @@ module State = struct
     | Ok info ->
       (* filtering the plugin if the file is available *)
       let iter plugin =
-        Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>= function
-        | Ok () ->
-          let index = t.index in
-          t.index <- succ index;
-          let sources = Plugin.sources plugin in
-          let key = Sources.key sources in
-          Key.Table.set t.table ~key ~data:(index, plugin);
-          Deferred.return ()
-        | Error _ ->
-          Deferred.return ()
+        Unix.access (Plugin.cmxs_filename plugin) [ `Exists ; `Read ] >>| function
+        | Ok ()   -> add_plugin_internal t plugin;
+        | Error _ -> ()
       in
       Deferred.List.iter ~f:iter (Info.plugins info) >>| fun () ->
       Ok ()
   ;;
 
-  let create config =
-    let table = Key.Table.create () in
-    let index = 0 in
+  let create (config : Config.t) =
     Shell.absolute_pathname (Config.dir config) >>=? fun config_dir ->
-    let deprecated_plugins = Queue.create () in
-    let config = { config with Config.dir = config_dir } in
-    let old_files_deleted = false in
-    let has_write_lock = false in
     let state =
-      { index
-      ; old_files_deleted
-      ; config
-      ; has_write_lock
-      ; table
-      ; deprecated_plugins
+      { config                   = { config with dir = config_dir }
+      ; has_write_lock           = false
+      ; next_creation_num        = 0
+      ; old_files_deleted        = false
+      ; table                    = Key.Table.create ()
+      ; num_plugins_by_basenames = Count_by_basenames.create ()
+      ; num_plugins_by_filenames = Count_by_filenames.create ()
       }
     in
     load_info state >>=? fun () ->
@@ -335,24 +475,16 @@ module State = struct
 
   let clean_old t =
     assert (not (Config.readonly t.config));
-    let max_files = Config.max_files t.config in
-    let cut = t.index - max_files in
-    let to_clean = ref [] in
-    let clean plugin = to_clean := plugin :: ! to_clean in
-    let f (index, plugin) =
-      if index < cut then (clean plugin; false) else true
-    in
-    Key.Table.filter_inplace t.table ~f;
-    Queue.iter ~f:clean t.deprecated_plugins;
-    Queue.clear t.deprecated_plugins;
-    parallel !to_clean ~f:Plugin.clean >>=? fun () ->
+    parallel (get_and_clear_plugins_to_remove t) ~f:(fun plugin_in_table ->
+      Plugin.clean plugin_in_table.plugin)
+    >>=? fun () ->
     (* clean other old cmxs files that are no longer referenced by the info
        needs to be done only once *)
     if t.old_files_deleted then Deferred.Or_error.return ()
     else begin
       let current_cmxs_basename =
-        let basenames = List.rev_map (Key.Table.data t.table) ~f:(fun (_, plugin) ->
-          Filename.basename (Plugin.cmxs_filename plugin)
+        let basenames = List.rev_map (Hashtbl.data t.table) ~f:(fun plugin ->
+          Filename.basename (Plugin.cmxs_filename (Plugin_in_table.plugin plugin))
         ) in
         String.Hash_set.of_list basenames
       in
@@ -371,35 +503,17 @@ module State = struct
   ;;
 
   let find t sources =
-    let key = Sources.key sources in
-    let table = t.table in
-    match Key.Table.find table key with
+    match Hashtbl.find t.table (Key.of_sources sources) with
     | None -> None
-    | Some (_, plugin) ->
-      let plugin_sources = Plugin.sources plugin in
-      if Sources.(=) plugin_sources sources
-      then
-        if Plugin.was_compiled_by_current_exec plugin
-        || Config.try_old_cache_with_new_exec t.config
-        then Some plugin
-        else None
-      else (
-        (* This cache is now invalid, we should remove the file but this is very likely
-           that a 'add' will be called, and we prefer writing the info file only once.
-           We can't add the same plugin several times in the queue because it is removed
-           from the hashtbl. If the config is read only, the file will stay in the
-           queue. *)
-        if not (Config.readonly t.config) then (
-          Queue.enqueue t.deprecated_plugins plugin;
-        );
-        Key.Table.remove table key;
-        None
-      )
+    | Some { plugin; _ } ->
+      if Plugin.was_compiled_by_current_exec plugin
+         || Config.try_old_cache_with_new_exec t.config
+      then Some plugin
+      else None
   ;;
 
   let add t sources plugin_uuid filename =
     if_ (not (Config.readonly t.config)) (fun () ->
-      let key = Sources.key sources in
       let dir = Config.dir t.config ^/ Info.cache_dir in
       Shell.mkdir_p ~perm:Info.cache_dir_perm dir >>=? fun () ->
       take_write_lock t >>=? fun () ->
@@ -414,9 +528,7 @@ module State = struct
         ; build_info = Build_info.current
         }
       in
-      let index = t.index in
-      t.index <- succ index;
-      Key.Table.set t.table ~key ~data:(index, plugin);
+      add_plugin_internal t plugin;
       clean_old t >>=? fun () ->
       save_info t
     )
