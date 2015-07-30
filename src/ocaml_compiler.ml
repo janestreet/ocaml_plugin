@@ -95,10 +95,10 @@ let () =
     (* This is a way of extracting the archive from the executable. It can be used like
        this: OCAML_PLUGIN_DUMP_ARCHIVE= ./run.exe | tar -xz
        We exit to avoid running any side effects that could be done later at toplevel. *)
-    Printf.eprintf "archive digest: %s\n%!"
+    Core.Std.Printf.eprintf "archive digest: %s\n%!"
       (Plugin_cache.Digest.to_string (archive_digest ()));
     begin match archive () with
-    | None -> Printf.printf "No archive\n%!"
+    | None -> Core.Std.Printf.printf "No archive\n%!"
     | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout
     end;
     Core.Caml.Pervasives.exit 0

@@ -52,7 +52,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
     lazy (prog::args |> <:sexp_of< string list >> |> Sexp.to_string)
   in
   if !echo then
-    Printf.printf "Shell: %s\n%!" (force command_text);
+    Core.Std.Printf.printf "Shell: %s\n%!" (force command_text);
 
   Process.create ?working_dir ~prog ~args () >>=? fun process ->
     Process.collect_output_and_wait process >>| fun output ->
@@ -67,7 +67,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
         else Ok ()
     in
     if !verbose then (
-      Printf.printf "%s%s%!" (endline stdout) (endline stderr);
+      Core.Std.Printf.printf "%s%s%!" (endline stdout) (endline stderr);
     );
     match error_and_status with
     | Ok () ->

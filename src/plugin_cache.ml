@@ -1,3 +1,37 @@
+module Stable = struct
+  open Core.Stable
+
+  module Config = struct
+    let try_old_cache_with_new_exec_default = false
+    module V1 = struct
+      type t =
+        { dir       : string
+        ; max_files : int sexp_option
+        ; readonly  : bool
+        }
+      with fields, sexp, bin_io, compare
+    end
+    module V2 = struct
+      type t =
+        { dir       : string
+        ; max_files : int with default(10)
+        ; readonly  : bool with default(false)
+        ; try_old_cache_with_new_exec : bool
+            with default(try_old_cache_with_new_exec_default)
+        }
+      with fields, sexp, bin_io, compare
+      let t_of_sexp = Core.Std.Sexp.of_sexp_allow_extra_fields t_of_sexp
+      let of_prev (v1 : V1.t) =
+        { dir = v1.dir
+        ; max_files = Core.Std.Option.value v1.max_files ~default:10
+        ; readonly = v1.readonly
+        ; try_old_cache_with_new_exec = try_old_cache_with_new_exec_default
+        }
+      ;;
+    end
+  end
+end
+
 open Core.Std
 open Async.Std
 open Import
@@ -211,62 +245,36 @@ end = struct
 end
 
 module Config = struct
-  let try_old_cache_with_new_exec_default = false
+  module Stable = Stable.Config
 
-  module V1 = struct
-    type t =
-      { dir       : string
-      ; max_files : int sexp_option
-      ; readonly  : bool
-      }
-    with fields, sexp
-  end
-  module V2 = struct
-    type t =
-      { dir       : string
-      ; max_files : int with default(10)
-      ; readonly  : bool with default(false)
-      ; try_old_cache_with_new_exec : bool
-        with default(try_old_cache_with_new_exec_default)
-      }
-    with fields, sexp
-    let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
-    let of_prev v1 =
-      { dir = v1.V1.dir
-      ; max_files = Option.value v1.V1.max_files ~default:10
-      ; readonly = v1.V1.readonly
-      ; try_old_cache_with_new_exec = try_old_cache_with_new_exec_default
-      }
-    ;;
-  end
   module V = struct
     type t =
-    | V1 of V1.t
-    | V2 of V2.t
+    | V1 of Stable.V1.t
+    | V2 of Stable.V2.t
     with sexp
 
     let to_current = function
-      | V1 v1 -> V2.of_prev v1
+      | V1 v1 -> Stable.V2.of_prev v1
       | V2 v2 -> v2
   end
 
-  include V2
+  include Stable.V2
 
   let t_of_sexp sexp =
     let v =
-      try V.t_of_sexp sexp with _ -> V.V1 (V1.t_of_sexp sexp)
+      try V.t_of_sexp sexp with _ -> V.V1 (Stable.V1.t_of_sexp sexp)
     in
     V.to_current v
   ;;
 
-  let sexp_of_t t = V.sexp_of_t (V.V2 t)
+  let sexp_of_t t = V.sexp_of_t (V2 t)
   ;;
 
   let create
       ~dir
       ?(max_files=10)
       ?(readonly=false)
-      ?(try_old_cache_with_new_exec=try_old_cache_with_new_exec_default)
+      ?(try_old_cache_with_new_exec=Stable.try_old_cache_with_new_exec_default)
       () =
     { dir
     ; max_files
@@ -341,7 +349,7 @@ module State = struct
       let fold_data table ~init ~f =
         Hashtbl.fold table ~init ~f:(fun ~key:_ ~data acc -> f acc data)
       in
-      Container.fold_min fold_data t.table
+      Container.min_elt ~fold:fold_data t.table
         ~cmp:(priority_heuristic_to_clean_plugins t)
     in
     let max_plugins = max 0 t.config.max_files in

@@ -26,7 +26,7 @@ let run
            begin match Sys.getenv "VERBOSE" with
            | None -> ()
            | Some _ ->
-             Printf.printf "Loaded %s\n"
+             Core.Std.Printf.printf "Loaded %s\n"
                (String.concat (List.map files ~f:Filename.basename) ~sep:" ")
            end;
            Ocaml_dynloader.Side_effect.load_ocaml_src_files loader files

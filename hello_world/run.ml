@@ -38,14 +38,14 @@ let () =
       ?persistent_archive_dirpath
       () >>= function
     | Error e ->
-      Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
-      Printf.eprintf "use run_standalone.exe (cf build.sh) instead\n%!";
+      Core.Std.Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
+      Core.Std.Printf.eprintf "use run_standalone.exe (cf build.sh) instead\n%!";
       exit 1
     | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
       let loader = Ocaml_compiler.loader ocaml_compiler in
       let stdin = Lazy.force Reader.stdin in
       let rec loop () =
-        Printf.printf "enter ml filename(s) to load: %!";
+        Core.Std.Printf.printf "enter ml filename(s) to load: %!";
         Reader.read_line stdin >>= function
         | `Eof ->
           Ocaml_compiler.clean ocaml_compiler >>= fun result ->
@@ -60,11 +60,11 @@ let () =
           let with_files files =
             Plugin.load_ocaml_src_files loader files >>= function
             | Error err ->
-              Printf.eprintf "loading failed:\n%s\n%!" (Error.to_string_hum err);
+              Core.Std.Printf.eprintf "loading failed:\n%s\n%!" (Error.to_string_hum err);
               loop ()
             | Ok plugin ->
               let module M = (val plugin : Plugin_intf.S) in
-              Printf.printf "loaded plugin's message : %S\n%!" M.message;
+              Core.Std.Printf.printf "loaded plugin's message : %S\n%!" M.message;
               loop ()
           in
           match files with
@@ -79,14 +79,14 @@ let () =
                  | Dynlink.Error e -> Dynlink.error_message e
                  | e -> Exn.to_string e
                in
-               Printf.eprintf "dynlink failed:\n%s\n%!" str
+               Core.Std.Printf.eprintf "dynlink failed:\n%s\n%!" str
             );
             loop ()
           | [ "dep" ; file ] -> begin
               (* hack to play a bit with ocamldep *)
               Ocaml_dynloader.find_dependencies loader file >>= function
               | Error err ->
-                Printf.eprintf "ocamldep failed:\n%s\n%!" (Error.to_string_hum err);
+                Core.Std.Printf.eprintf "ocamldep failed:\n%s\n%!" (Error.to_string_hum err);
                 loop ()
               | Ok files -> with_files files
             end

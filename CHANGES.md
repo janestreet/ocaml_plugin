@@ -1,3 +1,7 @@
+## 113.00.00
+
+- Made `Ocaml_plugin.Plugin_cache.Config.t` stable.
+
 ## 112.35.00
 
 - In `copy_source_files_to_working_dir`, exclude files that start with
