@@ -11,7 +11,7 @@ module Repr : sig
   val univ_constr : t -> string
 end
 
-type t with sexp
+type t [@@deriving sexp]
 
 val uuid : t -> Uuid.t
 

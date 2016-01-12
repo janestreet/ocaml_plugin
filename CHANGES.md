@@ -1,3 +1,11 @@
+## 113.24.00
+
+- Switch to ppx.
+
+- Allow ppx-style code to be loaded by plugin-applications build using ocaml\_plugin.
+
+- Follow Core & Async evolution.
+
 ## 113.00.00
 
 - Made `Ocaml_plugin.Plugin_cache.Config.t` stable.

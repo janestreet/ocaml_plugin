@@ -5,9 +5,10 @@ open Import
 let tar_id = "dynlink.tgz"
 ;;
 
-let ocamlopt_opt = Ocaml_dynloader.ocamlopt_opt
-let camlp4o_opt  = Ocaml_dynloader.camlp4o_opt
-let ocamldep_opt = Ocaml_dynloader.ocamldep_opt
+let ocamlopt_opt = "ocamlopt.opt"
+let ocamldep_opt = "ocamldep.opt"
+let camlp4o_opt  = "camlp4o.opt"
+let ppx_exe      = "ppx.exe"
 ;;
 
 let pervasives  = "pervasives.cmi"
@@ -17,11 +18,76 @@ let config_file = "config.sexp"
 let persistent_archive_subdir = "compiler"
 ;;
 
-let mandatory_embedded_files = [
-  ocamlopt_opt;
-  pervasives;
-]
+let mandatory_embedded_files =
+  [ ocamlopt_opt
+  ; pervasives
+  ]
 ;;
+
+module Config = struct
+  (* Attempt to have maximum backward and forward compatibility mode for apps that allow
+     the use of a persistent archive *)
+  module Syntax = struct
+    type t =
+      { pa_files           : string list                       [@default []]
+      ; camlp4_is_embedded : [`pa_files of string list] option [@default None]
+      ; ppx_is_embedded    : bool                              [@default false]
+      }
+    [@@deriving sexp]
+
+    let t_of_sexp =
+      Sexp.of_sexp_allow_extra_fields t_of_sexp
+    ;;
+  end
+
+  type t =
+    { camlp4_is_embedded : [`pa_files of string list] option
+    ; ppx_is_embedded    : bool
+    }
+
+  include Sexpable.Of_sexpable (Syntax)
+      (struct
+        type nonrec t = t
+        let of_sexpable ({ Syntax.
+                           pa_files
+                         ; camlp4_is_embedded
+                         ; ppx_is_embedded
+                         } as syntax) =
+          { camlp4_is_embedded =
+              begin match camlp4_is_embedded with
+              | None ->
+                begin match pa_files with
+                | [] -> None
+                | _ :: _ -> Some (`pa_files pa_files)
+                end
+              | Some (`pa_files pa_files') ->
+                begin match pa_files with
+                | []   -> ()
+                | _ :: _ ->
+                  if 0 <> [%compare: string list] pa_files pa_files'
+                  then failwiths "invalid config file" syntax [%sexp_of: Syntax.t];
+                end;
+                camlp4_is_embedded
+              end
+          ; ppx_is_embedded
+          }
+        ;;
+
+        let to_sexpable { camlp4_is_embedded
+                        ; ppx_is_embedded
+                        } =
+          { Syntax.
+            camlp4_is_embedded
+          ; ppx_is_embedded
+          ; pa_files =
+              begin match camlp4_is_embedded with
+              | None -> []
+              | Some (`pa_files pa_files) -> pa_files
+              end
+          }
+        ;;
+      end)
+end
 
 (* Map of the directories contents:
    - build_dir: /tmp/ocaml_plugin_XXXXX/{m_dyn_1_.ml,m_dyn_1_.o,m_dyn_1_.cmx,m_dyn_1_.cmxs,...}
@@ -49,7 +115,7 @@ type t =
   { loader       : Ocaml_dynloader.t
   ; archive_lock : Archive_lock.t ref
   }
-with fields
+[@@deriving fields]
 
 let clean t =
   Ocaml_dynloader.clean t.loader >>= fun r1 ->
@@ -114,7 +180,7 @@ let save_archive_to destination =
   )
 ;;
 
-exception Mandatory_file_not_found of string * string list with sexp
+exception Mandatory_file_not_found of string * string list [@@deriving sexp]
 ;;
 
 (* Because the directory is empty before check_mandatory_files is called (modulo the
@@ -135,8 +201,39 @@ let check_mandatory_files working_dir =
   Deferred.Or_error.try_with ~extract_exn:true fct
 ;;
 
+module Code_style = struct
+  type t =
+    [ `No_preprocessing
+    | `Camlp4_style
+    | `Ppx_style
+    ]
+  [@@deriving sexp]
+
+  let of_string_alist =
+    [ "camlp4"           , `Camlp4_style
+    ; "ppx"              , `Ppx_style
+    ; "no-preprocessing" , `No_preprocessing
+    ]
+  ;;
+
+  let doc =
+    sprintf "(%s)"
+      (of_string_alist
+       |> List.map ~f:fst
+       |> String.concat ~sep:"|")
+  ;;
+
+  let arg_type = Command.Arg_type.of_alist_exn of_string_alist
+  let optional_param =
+    Command.Spec.(
+      flag "-code-style" (optional arg_type)
+        ~doc:(sprintf "%s Specify plugin code style" doc))
+  ;;
+end
+
 type 'a create_arguments = (
-  ?persistent_archive_dirpath:string
+  ?code_style:Code_style.t
+  -> ?persistent_archive_dirpath:string
   -> 'a
 ) Ocaml_dynloader.create_arguments
 
@@ -154,7 +251,7 @@ end = struct
       ; build_info     : Sexp.t
       ; archive_digest : Digest.t
       }
-    with sexp
+    [@@deriving sexp]
 
     let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
@@ -168,7 +265,7 @@ end = struct
         [ "version"  , sexp_of_string Params.version
         ; "login"    , sexp_of_string login
         ; "hostname" , sexp_of_string (Unix.gethostname ())
-        ; "sys_argv" , <:sexp_of< string array >> Sys.argv
+        ; "sys_argv" , [%sexp_of: string array] Sys.argv
         ]
       ) >>|? fun infos ->
       let archive_digest = archive_digest () in
@@ -244,6 +341,7 @@ let create
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ?run_plugin_toplevel
+    ?code_style
     ?persistent_archive_dirpath
     () =
   let archive_lock = ref Archive_lock.Cleaned in
@@ -253,23 +351,6 @@ let create
     Shell.absolute_pathname path >>|? fun path ->
     Some (path ^/ persistent_archive_subdir)
   ) >>=? fun persistent_archive_dirpath ->
-  let initialize_compilation_callback ~directory:build_dir =
-    let persistent, compiler_dir =
-      match persistent_archive_dirpath with
-      | None                 -> false, build_dir
-      | Some archive_dirpath -> true,  archive_dirpath
-    in
-    Plugin_archive.extract ~archive_lock ~persistent compiler_dir >>=? fun () ->
-    check_mandatory_files compiler_dir >>=? fun files ->
-    if List.mem files config_file
-    then
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-        Reader.load_sexp_exn (compiler_dir ^/ config_file)
-          Ocaml_dynloader.Config.t_of_sexp
-        >>| Option.some
-      )
-    else Deferred.return (Ok None)
-  in
   let in_compiler_dir exec =
     Option.value persistent_archive_dirpath ~default:"." ^/ exec
   in
@@ -279,11 +360,69 @@ let create
     | Some dir -> Some (dir :: Option.value include_directories ~default:[])
   in
   let ocamlopt_opt = in_compiler_dir ocamlopt_opt in
-  let camlp4o_opt  = in_compiler_dir camlp4o_opt in
   let ocamldep_opt = in_compiler_dir ocamldep_opt in
   let nostdlib flags = "-nostdlib" :: Option.value ~default:[] flags in
   let cmx_flags = nostdlib cmx_flags in
   let cmxs_flags = nostdlib cmxs_flags in
+  let preprocessor (config_opt : Config.t option) =
+    let no_preprocessing = Ocaml_dynloader.Preprocessor.No_preprocessing in
+    let camlp4 pa_files =
+      Ocaml_dynloader.Preprocessor.Camlp4
+        { camlp4o_opt = in_compiler_dir camlp4o_opt
+        ; pa_files
+        }
+    in
+    let ppx =
+      Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe }
+    in
+    match code_style, config_opt with
+    | None, None -> Ok no_preprocessing
+    | None, Some { camlp4_is_embedded; ppx_is_embedded } ->
+      if ppx_is_embedded
+      then Ok ppx
+      else
+        begin match camlp4_is_embedded with
+        | Some (`pa_files pa_files) -> Ok (camlp4 pa_files)
+        | None -> Ok no_preprocessing
+        end
+
+    | Some `No_preprocessing, _ -> Ok no_preprocessing
+
+    | Some `Camlp4_style, (None | Some {camlp4_is_embedded = None; _ }) ->
+      Or_error.error_string "There is no embedded camlp4o_opt in the current executable"
+
+    | Some `Camlp4_style, Some {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
+      Ok (camlp4 pa_files)
+
+    | Some `Ppx_style, (None | Some {ppx_is_embedded = false; _}) ->
+      Or_error.error_string "There is no embedded ppx_exe in the current executable"
+
+    | Some `Ppx_style, Some {ppx_is_embedded = true; _} -> Ok ppx
+  in
+  let initialize_compilation_config ~directory:build_dir =
+    let persistent, compiler_dir =
+      match persistent_archive_dirpath with
+      | None                 -> false, build_dir
+      | Some archive_dirpath -> true,  archive_dirpath
+    in
+    Plugin_archive.extract ~archive_lock ~persistent compiler_dir >>=? fun () ->
+    check_mandatory_files compiler_dir >>=? fun files ->
+    begin
+      if List.mem files config_file
+      then
+        Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+          Reader.load_sexp_exn (compiler_dir ^/ config_file) Config.t_of_sexp
+          >>| Option.some
+        )
+      else Deferred.return (Ok None)
+    end
+    >>=? fun config_opt ->
+    return (preprocessor config_opt)
+    >>|? fun preprocessor ->
+    { Ocaml_dynloader.Compilation_config.
+      preprocessor
+    }
+  in
   Ocaml_dynloader.create
     ?in_dir
     ?include_directories
@@ -294,15 +433,16 @@ let create
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ?run_plugin_toplevel
-    ~initialize_compilation_callback
+    ~initialize_compilation_config
     ~ocamlopt_opt
-    ~camlp4o_opt
     ~ocamldep_opt
-    () >>=? fun loader ->
-  let compiler = {
-    loader;
-    archive_lock;
-  } in
+    ()
+  >>=? fun loader ->
+  let compiler =
+    { loader
+    ; archive_lock
+    }
+  in
   Deferred.return (Ok (`this_needs_manual_cleaning_after compiler))
 ;;
 
@@ -326,7 +466,7 @@ let shutting_down () =
   | `Yes _ -> true
 ;;
 
-exception Shutting_down with sexp
+exception Shutting_down [@@deriving sexp]
 ;;
 
 let with_compiler
@@ -339,6 +479,7 @@ let with_compiler
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ?run_plugin_toplevel
+    ?code_style
     ?persistent_archive_dirpath
     ~f
     ()
@@ -354,6 +495,7 @@ let with_compiler
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
+      ?code_style
       ?persistent_archive_dirpath
       ()
     >>=? function `this_needs_manual_cleaning_after compiler ->
@@ -387,6 +529,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
+      ?code_style
       ?persistent_archive_dirpath
       files =
     let f compiler =
@@ -403,6 +546,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
+      ?code_style
       ?persistent_archive_dirpath
       ~f
       ()
@@ -419,9 +563,10 @@ let make_check_plugin_cmd ~check_ocaml_src_files =
            ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
       +> flag "-verbose" no_arg
            ~doc:" Be more verbose"
+      +> Code_style.optional_param
     )
   in
-  let main plugin_filenames use_ocamldep is_verbose () =
+  let main plugin_filenames use_ocamldep is_verbose code_style () =
     let f compiler =
       let loader = loader compiler in
       (if use_ocamldep
@@ -431,15 +576,14 @@ let make_check_plugin_cmd ~check_ocaml_src_files =
           | [] | _ :: _ :: _ ->
             return
               (Or_error.error "Give only the main file when using option -ocamldep"
-                 plugin_filenames <:sexp_of< string list >>))
+                 plugin_filenames [%sexp_of: string list]))
        else return (Ok plugin_filenames)
       ) >>=? fun plugin_filenames ->
       if is_verbose then
         Print.printf "checking: %s\n%!" (String.concat ~sep:" " plugin_filenames);
       check_ocaml_src_files loader plugin_filenames
     in
-    with_compiler
-      ~f ()
+    with_compiler ?code_style ~f ()
     >>| function
     | Ok () ->
       if is_verbose then Print.printf "ok\n%!";

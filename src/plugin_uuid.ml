@@ -5,7 +5,7 @@ module Repr = struct
     { t           : string
     ; univ_constr : string
     }
-  with sexp, fields
+  [@@deriving sexp, fields]
 
   let create ~t ~univ_constr =
     { t
@@ -25,7 +25,7 @@ module V1 = struct
     ; ml_bundles : Ml_bundle.t list
     ; repr       : Repr.t option
     }
-  with sexp, fields
+  [@@deriving sexp, fields]
 end
 
 module V2 = struct
@@ -35,7 +35,7 @@ module V2 = struct
     ; ml_bundles : Ml_bundle.t list
     ; repr       : Repr.t
     }
-  with sexp, fields
+  [@@deriving sexp, fields]
 
   let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
@@ -62,7 +62,7 @@ module Versioned = struct
   type t =
   | V1 of V1.t
   | V2 of V2.t
-  with sexp
+  [@@deriving sexp]
   let to_current = function
     | V1 v1 -> V2.of_prev v1
     | V2 v2 -> v2

@@ -6,70 +6,6 @@ let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)
 let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
 ;;
 
-module Flags =
-struct
-
-  let ocamlopt_opt =
-    Command.Spec.(flag "-cc"
-            ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
-            (required file))
-  ;;
-
-  let camlp4o_opt =
-    Command.Spec.(flag "-pp"
-            ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
-            (optional file))
-  ;;
-
-  let ocamldep_opt =
-    Command.Spec.(flag "-ocamldep"
-            ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
-            (optional file))
-  ;;
-
-  let pa_files =
-    Command.Spec.(flag "-pa-cmxs"
-            ~doc:"<file.cmxs> path to a native syntax extension plugin file"
-            (listed file))
-  ;;
-
-  let target =
-    Command.Spec.(flag "-o"
-            ~doc:"<file.c> set the name of the c file to be created"
-            (required file))
-  ;;
-
-  let wrap_symbol =
-    Command.Spec.(flag "-wrap-symbol"
-            ~doc:" generate __wrap_ocaml_plugin_archive instead of ocaml_plugin_archive"
-            no_arg)
-  ;;
-
-  let verbose =
-    Command.Spec.(flag "-verbose"
-            ~doc:" be more verbose"
-            no_arg)
-  ;;
-
-  let files =
-    Command.Spec.(anon (sequence ("<embedded-file>" %: file)))
-  ;;
-
-  let all =
-    Command.Spec.(
-      empty
-      +> ocamlopt_opt
-      +> camlp4o_opt
-      +> ocamldep_opt
-      +> pa_files
-      +> target
-      +> wrap_symbol
-      +> verbose
-      +> files
-    )
-  ;;
-end
-
 let readme () = "\
 This tool archives ocamlopt, cmis, camlp4 and preprocessors in a c file containing a big
 static string. The resulting .o file should be linked with any executable that uses
@@ -78,12 +14,8 @@ containing a dummy definition of the function ocaml_plugin_archive if you know y
 not need it."
 ;;
 
-let summary =
-  "tool to embed ocamlopt and cmi files into a c file"
-;;
-
-exception Suspicious_files_in_tar of string list * string list with sexp
-exception Missing_files_in_tar of string list * string list with sexp
+exception Suspicious_files_in_tar of string list * string list [@@deriving sexp]
+exception Missing_files_in_tar of string list * string list [@@deriving sexp]
 ;;
 
 let tar_check files tar =
@@ -143,7 +75,7 @@ CAMLprim value %socaml_plugin_archive_digest (value unit __attribute__ ((unused)
 
 let generate_c_file wrap_symbol target tar =
   let module Digest = Plugin_cache.Digest in
-  Monitor.try_with ~here:_here_ (fun () ->
+  Monitor.try_with ~here:[%here] (fun () ->
     Digest.file tar >>=! fun file_digest ->
     let file_digest = Digest.to_string file_digest in
     Writer.with_file target ~f:(fun writer ->
@@ -170,21 +102,73 @@ let generate_c_file wrap_symbol target tar =
   )
 ;;
 
-let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbose files () =
+let command =
+  Command.async
+    ~summary:"tool to embed ocamlopt and cmi files into a c file"
+    ~readme
+    Command.Spec.(
+      empty
+
+      ++ step (fun k ocamlopt_opt -> k ~ocamlopt_opt)
+      +> flag "-cc" (required file)
+           ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
+
+      ++ step (fun k camlp4o_opt -> k ~camlp4o_opt)
+      +> flag "-pp" (optional file)
+           ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
+
+      ++ step (fun k ppx_exe -> k ~ppx_exe)
+      +> flag "-ppx" (optional file)
+           ~doc:"</path/to/ppx.exe> set the executable for ppx preprocessing"
+
+      ++ step (fun k ocamldep_opt -> k ~ocamldep_opt)
+      +> flag "-ocamldep" (optional file)
+           ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
+
+      ++ step (fun k pa_files -> k ~pa_files)
+      +> flag "-pa-cmxs" (listed file)
+           ~doc:"<file.cmxs> path to a native syntax extension plugin file"
+
+      ++ step (fun k target -> k ~target)
+      +> flag "-o" (required file)
+           ~doc:"<file.c> set the name of the c file to be created"
+
+      ++ step (fun k wrap_symbol -> k ~wrap_symbol)
+      +> flag "-wrap-symbol" no_arg
+           ~doc:" generate __wrap_ocaml_plugin_archive instead of ocaml_plugin_archive"
+
+      ++ step (fun k verbose -> k ~verbose)
+      +> flag "-verbose" no_arg ~doc:" be more verbose"
+
+      ++ step (fun k extra_files -> k ~extra_files)
+      +> anon (sequence ("<embedded-file>" %: file))
+    )
+  (fun
+    ~ocamlopt_opt
+    ~camlp4o_opt
+    ~ppx_exe
+    ~ocamldep_opt
+    ~pa_files
+    ~target
+    ~wrap_symbol
+    ~verbose
+    ~extra_files
+    () ->
   let _set_defaults_scope =
     Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
   in
   Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
-  let seen = String.Table.create () in
+  let embedded_files = String.Hash_set.create () in
+  let embed_file basename =
+    if Hash_set.mem embedded_files basename
+    then failwiths "cannot embed multiple files with the same basename"
+           basename [%sexp_of: string];
+    Hash_set.add embedded_files basename
+  in
   let cp ~filename ~basename =
-    let () =
-      match String.Table.add seen ~key:basename ~data:filename with
-      | `Ok -> ()
-      | `Duplicate ->
-        failwithf "basename collision: %s" basename ()
-    in
-    Ocaml_plugin.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename) >>|! fun () ->
-    ()
+    embed_file basename;
+    Ocaml_plugin.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename)
+    >>| ok_exn
   in
   let copy_file =
     let fd_throttle =
@@ -199,35 +183,36 @@ let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbo
         basename
       )
   in
-  Deferred.List.map ~how:`Parallel files ~f:copy_file >>= fun files ->
-  cp ~filename:ocamlopt_opt ~basename:Ocaml_dynloader.ocamlopt_opt >>= fun () ->
-  let files = Ocaml_dynloader.ocamlopt_opt :: files in
-  (match ocamldep_opt with
-   | Some ocamldep_opt ->
-     cp ~filename:ocamldep_opt ~basename:Ocaml_dynloader.ocamldep_opt >>| fun () ->
-     Ocaml_dynloader.ocamldep_opt :: files
-   | None ->
-     return files
-  ) >>= fun files ->
-  (
-    match camlp4o_opt with
-    | None ->
-      begin match pa_files with
-      | [] -> Deferred.return []
-      | _ -> failwith "syntax extension files given, but the -camlp4 flag is absent"
-      end
-    | Some camlp4o_opt ->
-      Deferred.List.map ~how:`Parallel pa_files ~f:copy_file
-      >>= fun pa_files ->
-      let config = { Ocaml_dynloader.Config. pa_files } in
-      let config_file = tmpdir ^/ Ocaml_compiler.config_file in
-      Sexp.save_hum config_file (Ocaml_dynloader.Config.sexp_of_t config) ;
-      cp ~filename:camlp4o_opt ~basename:Ocaml_dynloader.camlp4o_opt >>| fun () ->
-      Ocaml_dynloader.camlp4o_opt :: Ocaml_compiler.config_file :: pa_files
-  ) >>= fun camlp4_files ->
-  let files = camlp4_files @ files in
+  Deferred.List.map ~how:`Parallel extra_files ~f:copy_file >>= fun (_ : string list) ->
+  cp ~filename:ocamlopt_opt ~basename:Ocaml_compiler.ocamlopt_opt >>= fun () ->
+  begin match ocamldep_opt with
+  | Some ocamldep_opt -> cp ~filename:ocamldep_opt ~basename:Ocaml_compiler.ocamldep_opt
+  | None -> return ()
+  end >>= fun () ->
+  begin match ppx_exe with
+  | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_compiler.ppx_exe
+  | None -> return ()
+  end >>= fun () ->
+  begin match camlp4o_opt with
+  | None ->
+    begin match pa_files with
+    | [] -> return ()
+    | _ :: _ -> failwith "camlp4 extension files given (with -pa-cmxs), but -pp is absent"
+    end
+  | Some camlp4o_opt -> cp ~filename:camlp4o_opt ~basename:Ocaml_compiler.camlp4o_opt
+  end >>= fun () ->
+  Deferred.List.map ~how:`Parallel pa_files ~f:copy_file
+  >>= fun pa_files ->
+  let camlp4_is_embedded = Option.map camlp4o_opt ~f:(fun _ -> `pa_files pa_files) in
+  let ppx_is_embedded = Option.is_some ppx_exe in
+  let config = { Ocaml_compiler.Config. camlp4_is_embedded; ppx_is_embedded } in
+  let config_file = tmpdir ^/ Ocaml_compiler.config_file in
+  Writer.save_sexp ~hum:true config_file ([%sexp_of: Ocaml_compiler.Config.t] config)
+  >>= fun () ->
+  embed_file Ocaml_compiler.config_file;
   let tar = "a.tgz" in
-  Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files tar >>=! fun () ->
+  let embedded_files = Hash_set.to_list embedded_files in
+  Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files:embedded_files tar >>=! fun () ->
   let tar = tmpdir ^/ tar in
   generate_c_file wrap_symbol target tar
   >>= function
@@ -237,12 +222,9 @@ let main ocamlopt_opt camlp4o_opt ocamldep_opt pa_files target wrap_symbol verbo
     raise exn
   | Ok () ->
     Ocaml_plugin.Tar.list tar >>=! fun check_files ->
-    tar_check check_files files;
+    tar_check check_files embedded_files;
     Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ()
-;;
-
-let command =
-  Command.async ~summary ~readme Flags.all main
+  )
 ;;
 
 let () =

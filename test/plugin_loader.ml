@@ -6,11 +6,13 @@ let run
       ?use_cache
       ?persistent_archive_dirpath
       ~trigger_unused_value_warnings_despite_mli
+      ~ppx_flag
       ~run_plugin_toplevel
       ~find_dependencies
       files =
   Sys.getcwd () >>= fun cwd ->
   let in_dir = Filename.concat cwd "tmp_dir" in
+  let code_style = if ppx_flag then `Ppx_style else `Camlp4_style in
   (if find_dependencies
    then match files with
      | [file] ->
@@ -18,6 +20,7 @@ let run
          ~in_dir
          ~trigger_unused_value_warnings_despite_mli
          ~run_plugin_toplevel
+         ~code_style
          ?use_cache
          ?persistent_archive_dirpath
          ~f:(fun compiler ->
@@ -39,6 +42,7 @@ let run
        ~in_dir
        ~trigger_unused_value_warnings_despite_mli
        ~run_plugin_toplevel
+       ~code_style
        ?use_cache
        ?persistent_archive_dirpath
        files)
@@ -85,6 +89,10 @@ module Flags = struct
     flag "--warnings-in-utils" no_arg
       ~doc:" trigger unused warnings even in utils with an mli"
 
+  let ppx_flag () =
+    flag "--ppx" no_arg
+      ~doc:" expect ocaml files to be in ppx-style"
+
   let run_plugin_toplevel () =
     map ~f:(fun b -> if b then `Outside_of_async else `In_async_thread)
       (flag "--toplevel-outside-of-async" no_arg
@@ -108,6 +116,7 @@ let command =
       +> Flags.cache_size ()
       +> Flags.persistent_archive ()
       +> Flags.trigger_unused_value_warnings_despite_mli ()
+      +> Flags.ppx_flag ()
       +> Flags.run_plugin_toplevel ()
       +> Flags.find_dependencies ()
       +> Flags.anon_files ()
@@ -115,6 +124,7 @@ let command =
       use_cache
       persistent_archive_dirpath
       trigger_unused_value_warnings_despite_mli
+      ppx_flag
       run_plugin_toplevel
       find_dependencies
       files
@@ -125,6 +135,7 @@ let command =
           ?use_cache
           ?persistent_archive_dirpath
           ~trigger_unused_value_warnings_despite_mli
+          ~ppx_flag
           ~run_plugin_toplevel
           ~find_dependencies
       ) >>= fun () ->

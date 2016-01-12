@@ -11,14 +11,82 @@ open Core.Std
 open Async.Std
 
 (**
+   The convention over the name of the executables inside the archive.
+   All are native executables (.opt)
+*)
+val ocamlopt_opt : string
+val camlp4o_opt  : string
+val ocamldep_opt : string
+val ppx_exe      : string
+
+(**
    mutable type to get the compiler and the cmi which must have been embedded in
    the executable *)
 type t
 
 val config_file : string
 
+module Config : sig
+  type t =
+    { camlp4_is_embedded : [`pa_files of string list] option
+    ; ppx_is_embedded    : bool
+    }
+  [@@deriving sexp]
+end
+
+module Code_style : sig
+  type t =
+    [ `No_preprocessing
+    | `Camlp4_style
+    | `Ppx_style
+    ]
+  [@@deriving sexp]
+
+  val arg_type       : t Command.Arg_type.t
+  val optional_param : t option Command.Spec.param
+end
+
 type 'a create_arguments = (
-  ?persistent_archive_dirpath:string
+  ?code_style:Code_style.t
+  (**
+     Code_style can be specified statically in a jbuild...
+
+     {[
+       (embed (
+         ...
+         (code_style ppx)))
+     ]}
+
+     ...or dynamically using the above [code_style] create_argument.
+
+     The static selection controls which preprocessors are embedded in the archive.
+     The dynamic controls which preprocessor (if any) to use when loading a plugin.
+
+     The dynamically requested preprocessor shall be present in the archive, otherwise
+     an exception will be raised during the compilation of the plugin.
+
+     If the optional [code_style] argument is not given, the behaviour is determined by
+     the contents of the archive:
+
+     - if neither preprocessor is embedded, do [No_preprocessing].
+     - if just one preprocessor (camlp4 or ppx) is embedded, it is used.
+     - if both are embedded, use ppx (it's the future!).
+
+     A simple migration path which requires no application code changes is:
+     - select (code_style ppx) in the jbuild.
+     - build & roll out a new executable, and switch all plugins to ppx-style.
+     (The new executable will contain only the ppx preprocessor)
+
+     A more complex migration path (requires application code changes):
+     - select (code_style bilingual)
+     - Modify the plugin-app to select dynamically the [code_style] to use;
+         perhaps using a command line flag, or other config parameters.
+         See [ ../test/plugin_loader.ml].
+     - Build and roll out; Adapt plugins to ppx-style as required.
+     (The new executable will contain both camlp4 & ppx preprocessors)
+  *)
+
+  -> ?persistent_archive_dirpath:string
   (**
      Keep the extracted archive in some persistent location to avoid paying the cost of
      extraction each time a file needs to be compiled.

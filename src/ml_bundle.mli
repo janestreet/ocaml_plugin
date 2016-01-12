@@ -1,7 +1,7 @@
 open Core.Std
 open Async.Std
 
-type t with sexp, compare
+type t [@@deriving sexp, compare]
 
 (* The argument is a list of absolute paths (with or without extensions) to ml
    and mli files. The order is such that it is stable regarding the first file found

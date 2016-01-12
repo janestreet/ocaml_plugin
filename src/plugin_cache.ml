@@ -9,17 +9,17 @@ module Stable = struct
         ; max_files : int sexp_option
         ; readonly  : bool
         }
-      with fields, sexp, bin_io, compare
+      [@@deriving fields, sexp, bin_io, compare]
     end
     module V2 = struct
       type t =
         { dir       : string
-        ; max_files : int with default(10)
-        ; readonly  : bool with default(false)
+        ; max_files : int [@default 10]
+        ; readonly  : bool [@default false]
         ; try_old_cache_with_new_exec : bool
-            with default(try_old_cache_with_new_exec_default)
+            [@default try_old_cache_with_new_exec_default]
         }
-      with fields, sexp, bin_io, compare
+      [@@deriving fields, sexp, bin_io, compare]
       let t_of_sexp = Core.Std.Sexp.of_sexp_allow_extra_fields t_of_sexp
       let of_prev (v1 : V1.t) =
         { dir = v1.dir
@@ -37,26 +37,26 @@ open Async.Std
 open Import
 
 module Build_info : sig
-  type t with sexp
+  type t [@@deriving sexp]
   val is_current    : t -> bool
   val current       : t
   val not_available : t
 end = struct
-  type t = Sexp.t with sexp
-  let not_available = <:sexp_of< string >> "(not available)"
+  type t = Sexp.t [@@deriving sexp]
+  let not_available = [%sexp_of: string] "(not available)"
   let current = Params.build_info_as_sexp
   let is_current a = Sexp.equal current a
 end
 
-type filename = string with sexp, compare
-type basename = string with sexp, compare
+type filename = string [@@deriving sexp, compare]
+type basename = string [@@deriving sexp, compare]
 
 let parallel list ~f =
   Deferred.Or_error.List.iter ~how:`Parallel list ~f
 ;;
 
 module Digest : sig
-  type t with compare, sexp
+  type t [@@deriving compare, sexp]
   include Stringable with type t := t
   val file : filename -> t Deferred.Or_error.t
   val string : string -> t
@@ -77,7 +77,7 @@ end
 
 module Key = struct
   module T = struct
-    type t = (basename * Digest.t) list with sexp, compare
+    type t = (basename * Digest.t) list [@@deriving sexp, compare]
     let hash = Hashtbl.hash
   end
   include T
@@ -89,7 +89,7 @@ module Key = struct
 end
 
 module Sources = struct
-  type t = (filename * Digest.t) list with sexp
+  type t = (filename * Digest.t) list [@@deriving sexp]
 end
 
 module Plugin = struct
@@ -97,9 +97,9 @@ module Plugin = struct
     { cmxs_filename : filename (* invariant: absolute *)
     ; sources       : Sources.t
     ; plugin_uuid   : Plugin_uuid.t
-    ; build_info    : Build_info.t with default(Build_info.not_available)
+    ; build_info    : Build_info.t [@default Build_info.not_available]
     }
-  with fields, sexp
+  [@@deriving fields, sexp]
 
   let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
@@ -132,7 +132,7 @@ end = struct
 
   module Key = struct
     module T = struct
-      type t = string list with sexp, compare
+      type t = string list [@@deriving sexp, compare]
       let hash = Hashtbl.hash
     end
     include T
@@ -146,12 +146,11 @@ end = struct
   let create () = Key.Table.create ()
 
   let incr table key =
-    Hashtbl.change table key (fun value ->
-      Some (succ (Option.value value ~default:0)))
+    Hashtbl.incr table key ~by:1
   ;;
 
   let decr table key =
-    Hashtbl.change table key (function
+    Hashtbl.change table key ~f:(function
       | None -> None
       | Some x when x <= 1 -> None
       | Some x -> Some (pred x))
@@ -175,7 +174,7 @@ module Count_by_filenames = Make_count_by(struct
 ;;
 
 module Info : sig
-  type t with sexp_of
+  type t [@@deriving sexp_of]
 
   val create :
     plugins: Plugin.t list
@@ -199,7 +198,7 @@ end = struct
     ; build_info : Sexp.t
     ; plugins    : Plugin.t list
     }
-  with sexp, fields
+  [@@deriving sexp, fields]
 
   let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
@@ -251,7 +250,7 @@ module Config = struct
     type t =
     | V1 of Stable.V1.t
     | V2 of Stable.V2.t
-    with sexp
+    [@@deriving sexp]
 
     let to_current = function
       | V1 v1 -> Stable.V2.of_prev v1
@@ -294,7 +293,7 @@ module State = struct
       ; filenames    : Count_by_filenames.Key.t
       ; key          : Key.t
       }
-    with fields
+    [@@deriving fields]
 
     let older_first t1 t2 = Int.compare t1.creation_num t2.creation_num
   end
@@ -310,7 +309,7 @@ module State = struct
     }
 
   exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of
-      string * Error.t with sexp
+      string * Error.t [@@deriving sexp]
 
   let there_is_more_plugins_with_same what t p1 p2 =
     let num_plugins_with_same what t (p : Plugin_in_table.t) =

@@ -6,7 +6,7 @@ type t =
   ; mli         : string option
   ; module_name : string
   }
-with sexp, compare
+[@@deriving sexp, compare]
 
 let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 
@@ -16,7 +16,7 @@ type tmp_t =
   ; tmp_module_name : string
   }
 
-exception File_in_unknow_state of string with sexp
+exception File_in_unknow_state of string [@@deriving sexp]
 
 let valid_module_name s =
   s <> "" &&

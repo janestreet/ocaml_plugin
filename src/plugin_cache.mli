@@ -33,7 +33,7 @@ module Plugin : sig
 end
 
 module Config : sig
-  type t with sexp
+  type t [@@deriving sexp]
   val create :
     dir:string
     -> ?max_files:int (* default is 10 *)
@@ -81,7 +81,7 @@ val clean : t -> unit Deferred.Or_error.t
 
 (** Exported to be used in some other part of ocaml_plugin *)
 module Digest : sig
-  type t with compare, sexp
+  type t [@@deriving compare, sexp]
   include Stringable with type t := t
   val file : filename -> t Deferred.Or_error.t
   val string : string -> t

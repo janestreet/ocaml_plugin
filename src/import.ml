@@ -1,4 +1,4 @@
-open Core.Std let () = _squelch_unused_module_warning_
+open! Core.Std
 open Async.Std
 
 (* some shared internal util for ocaml_plugin *)

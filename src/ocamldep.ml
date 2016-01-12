@@ -24,16 +24,16 @@ let post_process ~target lines : String.Set.t Or_error.t =
         else
           Or_error.error "Unexpected target file in ocamldep output"
             (target, line)
-            <:sexp_of< string * string >>
+            [%sexp_of: string * string]
       )
     | _ ->
       Or_error.error "Fail to parse ocamldep output"
         lines
-        <:sexp_of< string list>>
+        [%sexp_of: string list]
   )
 ;;
 
-TEST_MODULE = struct
+let%test_module _ = (module struct
 
   let lines = [
     "a.cmx : a.cmi c.cmx d.cmx e.cmx";
@@ -45,9 +45,9 @@ TEST_MODULE = struct
   let expect = String.Set.of_list ["a"; "b"; "c"; "d"; "e"; "f"]
   ;;
 
-  TEST_UNIT = <:test_eq<String.Set.t>> (post_process ~target:"a" lines |> ok_exn) expect
+  let%test_unit _ = [%test_eq: String.Set.t] (post_process ~target:"a" lines |> ok_exn) expect
   ;;
-end
+end)
 
 let topological_sort ~visit_trace ~target ~find_direct_deps =
   (* this uses a Depth-First Search to find a topological order of compilation units and
@@ -75,7 +75,7 @@ let topological_sort ~visit_trace ~target ~find_direct_deps =
                      ~f:(String.(<>) target)))
       in
       return (Or_error.error "Circular dependency detected"
-                circle <:sexp_of<string list>>)
+                circle [%sexp_of: string list])
     end
     else if Queue.mem ~equal:String.equal visit_finish_order target
     then return (Ok ())
@@ -97,7 +97,7 @@ let topological_sort ~visit_trace ~target ~find_direct_deps =
   Queue.to_list visit_finish_order
 ;;
 
-TEST_MODULE = struct
+let%test_module _ = (module struct
 
   let test graph ~target =
     let graph =
@@ -109,7 +109,7 @@ TEST_MODULE = struct
       if Hash_set.mem visited s then
         failwiths "complexity violation in toposort, node visited more that once"
           (s, graph)
-          <:sexp_of< string * String.Set.t String.Map.t >>
+          [%sexp_of: string * String.Set.t String.Map.t]
       else
         Hash_set.add visited s
     in
@@ -120,7 +120,7 @@ TEST_MODULE = struct
     )
   ;;
 
-  TEST_UNIT =
+  let%test_unit _ =
     let graph = [
       "a", ["b"; "c"; "d"];
       "b", ["c"];
@@ -128,10 +128,10 @@ TEST_MODULE = struct
       "d", ["e"];
       "e", [];
     ] in
-    <:test_eq<string list>> (test graph ~target:"a" |> ok_exn) ["e"; "d"; "c"; "b"; "a"]
+    [%test_eq: string list] (test graph ~target:"a" |> ok_exn) ["e"; "d"; "c"; "b"; "a"]
   ;;
 
-  TEST_UNIT =
+  let%test_unit _ =
     let all =
       List.init 26 ~f:(fun i ->
         String.make 1 (Char.of_int_exn (Char.to_int 'a' + i)))
@@ -140,20 +140,20 @@ TEST_MODULE = struct
       let deps a = List.rev_filter all ~f:(String.(<) a) in
       List.map all ~f:(fun a -> a, deps a)
     in
-    <:test_eq<string list>> (test graph ~target:"a" |> ok_exn) (List.rev all)
+    [%test_eq: string list] (test graph ~target:"a" |> ok_exn) (List.rev all)
   ;;
 
-  TEST_UNIT =
+  let%test_unit _ =
     let graph = [
       "a", ["b"];
       "b", ["c"];
       "c", ["a"];
     ] in
-    <:test_eq<Sexp.t>>
-      (test graph ~target:"a" |> <:sexp_of<_ Or_error.t>>)
+    [%test_eq: Sexp.t]
+      (test graph ~target:"a" |> [%sexp_of: _ Or_error.t])
       (Sexp.of_string "(Error (\"Circular dependency detected\" (a b c)))")
   ;;
-end
+end)
 
 let find_dependencies ~prog ~args ~working_dir ~target =
   let args = "-one-line" :: args in

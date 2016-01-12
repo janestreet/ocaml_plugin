@@ -229,10 +229,10 @@ let handle_error load = function
 
 let load_file loader = function
   | `v1 files ->
-    let v1 = Conf.V1.Load.load_ocaml_src_files loader (Flags.split_files files) in
+    let v1 = Config.V1.Load.load_ocaml_src_files loader (Flags.split_files files) in
     v1 >>| (handle_error Dsl.register_v1)
   | `v2 files ->
-    let v2 = Conf.V2.Load.load_ocaml_src_files loader (Flags.split_files files) in
+    let v2 = Config.V2.Load.load_ocaml_src_files loader (Flags.split_files files) in
     v2 >>| (handle_error Dsl.register_v2)
   | `util files ->
     let res =
@@ -243,7 +243,7 @@ let load_file loader = function
 
 let load_default loader =
   load_file loader (`v1 conf_01) >>= fun () ->
-  let v2 = Conf.V2.Load.load_ocaml_src_files loader [conf_util;conf_02] in
+  let v2 = Config.V2.Load.load_ocaml_src_files loader [conf_util;conf_02] in
   v2 >>| (handle_error Dsl.register_v2)
 ;;
 
@@ -317,8 +317,8 @@ let run_command =
 let command =
   Command.group ~summary:"Toy sample program for ocaml_plugin" [
     "run", run_command;
-    "check-plugin-v1", Conf.V1.check_plugin_cmd;
-    "check-plugin-v2", Conf.V2.check_plugin_cmd;
+    "check-plugin-v1", Config.V1.check_plugin_cmd;
+    "check-plugin-v2", Config.V2.check_plugin_cmd;
   ]
 ;;
 

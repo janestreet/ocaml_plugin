@@ -19,48 +19,61 @@ let default_warnings_spec = warnings_spec ~disabled_warnings:default_disabled_wa
 let index = ref 0
 ;;
 
-module Config = struct
+module Camlp4 = struct
   type t =
-    { pa_files : string list
+    { camlp4o_opt : string
+    ; pa_files    : string list
     }
-  with sexp
-  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
 end
 
-(* every t has a different compilation directory *)
-type t =
-  { mutable cleaned     : bool
-  ; cmx_flags           : string list
-  ; cmxs_flags          : string list
-  ; trigger_unused_value_warnings_despite_mli : bool
-  ; compilation_config  : (string * Config.t option) Or_error.t Lazy_deferred.t
-  ; include_directories : string list
-  ; ocamlopt_opt        : string
-  ; camlp4o_opt         : string
-  ; ocamldep_opt        : string
-  ; pa_files            : string list
-  (* Usually contains explicit provided preprocessors. The ones
-     from the config will be added right before generating the
-     command lines *)
-  ; cache               : Plugin_cache.t Or_error.t Lazy_deferred.t option
-  ; run_plugin_toplevel : [ `In_async_thread | `Outside_of_async ]
-  }
-with fields
+module Ppx = struct
+  type t =
+    { ppx_exe : string
+    }
+end
 
-type dynloader = t
-
-let next_filename () =
-  let s = Printf.sprintf "m_dyn_%d_.ml" !index in
-  incr index;
-  s
-;;
-
-let ocamlopt_opt = "ocamlopt.opt"
-let camlp4o_opt  = "camlp4o.opt"
-let ocamldep_opt = "ocamldep.opt"
-;;
+module Preprocessor = struct
+  type t =
+    | No_preprocessing
+    | Camlp4 of Camlp4.t
+    | Ppx    of Ppx.t
+end
 
 module Compilation_config = struct
+  type t =
+    { preprocessor : Preprocessor.t
+    }
+
+  let default =
+    { preprocessor = No_preprocessing
+    }
+end
+
+(* Default values to use for those binaries if their path is not specified. *)
+module Default_binaries = struct
+  let ocamlopt_opt = "ocamlopt.opt"
+  let ocamldep_opt = "ocamldep.opt"
+end
+
+module Compilation_directory : sig
+
+  type t = private
+    { directory          : string
+    ; compilation_config : Compilation_config.t
+    }
+
+  val create
+    : initialize_compilation_config :
+        (directory:string -> Compilation_config.t Or_error.t Deferred.t)
+    -> in_dir : string
+    -> t Or_error.t Deferred.t
+
+end = struct
+
+  type t =
+    { directory          : string
+    ; compilation_config : Compilation_config.t
+    }
 
   let info_file_name = "info"
   ;;
@@ -68,7 +81,9 @@ module Compilation_config = struct
   let info_file dir = dir ^/ info_file_name
   ;;
 
-  module Info = struct
+  module Info : sig
+    val save : info_file:string -> unit Or_error.t Deferred.t
+  end = struct
     (*
       save some debug info in the builddir in case this doesn't get cleaned
     *)
@@ -81,7 +96,7 @@ module Compilation_config = struct
       ; version    : string
       ; build_info : Sexp.t
       }
-    with sexp_of
+    [@@deriving sexp_of]
 
     let create () =
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
@@ -107,7 +122,7 @@ module Compilation_config = struct
     let get = Lazy_deferred.create create
     ;;
 
-    let save info_file =
+    let save ~info_file =
       Lazy_deferred.force_exn get >>=? fun info ->
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Writer.save_sexp ~hum:true info_file info
@@ -115,39 +130,47 @@ module Compilation_config = struct
     ;;
   end
 
-  let lazy_create ~initialize_compilation_callback ~in_dir =
-    let compute () =
-      Shell.temp_dir ~in_dir () >>=? fun directory ->
-      begin
-        (match initialize_compilation_callback with
-        | None -> return (Ok None)
-        | Some task -> task ~directory) >>=? fun config_opt ->
-        let info_file = info_file directory in
-        Info.save info_file >>=? fun () ->
-        return (Ok (directory, config_opt))
-      end >>= function
-      | Ok _ as ok -> return ok
-      | Error e ->
-        (* if something failed, the rest of the code of ocaml dynloader will never know
-           about the directory so we should delete it since no one else can. *)
-        Shell.rm ~r:() ~f:() [directory] >>| function
-        | Ok () -> Error e
-        | Error e2 -> Error (Error.of_list [e; e2])
-    in
-    Lazy_deferred.create compute
+  let create ~initialize_compilation_config ~in_dir =
+    Shell.temp_dir ~in_dir () >>=? fun directory ->
+    begin
+      initialize_compilation_config ~directory >>=? fun compilation_config ->
+      Info.save ~info_file:(info_file directory) >>=? fun () ->
+      return (Ok { directory; compilation_config})
+    end >>= function
+    | Ok _ as ok -> return ok
+    | Error e ->
+      (* if something failed, the rest of the code of ocaml dynloader will never know
+         about the directory so we should delete it since no one else can. *)
+      Shell.rm ~r:() ~f:() [directory] >>| function
+      | Ok () -> Error e
+      | Error e2 -> Error (Error.of_list [e; e2])
   ;;
 end
 
-let update_with_config t = function
-  | None -> t
-  | Some conf ->
-    let pa_files = conf.Config.pa_files @ t.pa_files in
-    { t with
-      pa_files;
-    }
+(* every t has a different compilation directory *)
+type t =
+  { mutable cleaned       : bool
+  ; cmx_flags             : string list
+  ; cmxs_flags            : string list
+  ; trigger_unused_value_warnings_despite_mli : bool
+  ; compilation_directory : Compilation_directory.t Or_error.t Lazy_deferred.t
+  ; include_directories   : string list
+  ; ocamlopt_opt          : string
+  ; ocamldep_opt          : string
+  ; cache                 : Plugin_cache.t Or_error.t Lazy_deferred.t option
+  ; run_plugin_toplevel   : [ `In_async_thread | `Outside_of_async ]
+  }
+[@@deriving fields]
+
+type dynloader = t
+
+let next_filename () =
+  let s = Printf.sprintf "m_dyn_%d_.ml" !index in
+  incr index;
+  s
 ;;
 
-exception Is_not_native with sexp
+exception Is_not_native [@@deriving sexp]
 
 type 'a create_arguments =
   ?in_dir:string
@@ -171,11 +194,10 @@ let create
     ?(trigger_unused_value_warnings_despite_mli = false)
     ?use_cache
     ?(run_plugin_toplevel = `In_async_thread)
-    ?initialize_compilation_callback
-    ?(ocamlopt_opt = ocamlopt_opt)
-    ?(camlp4o_opt = camlp4o_opt)
-    ?(ocamldep_opt = ocamldep_opt)
-    ?(pa_files = [])
+    ?(initialize_compilation_config =
+      fun ~directory:_ -> return (Ok Compilation_config.default))
+    ?(ocamlopt_opt = Default_binaries.ocamlopt_opt)
+    ?(ocamldep_opt = Default_binaries.ocamldep_opt)
     ()
     =
   let cmx_flags =
@@ -192,8 +214,9 @@ let create
   let cache = Option.map use_cache ~f:(fun cache_config ->
     Lazy_deferred.create (fun () -> Plugin_cache.create cache_config))
   in
-  let compilation_config =
-    Compilation_config.lazy_create ~initialize_compilation_callback ~in_dir
+  let compilation_directory =
+    Lazy_deferred.create (fun () ->
+      Compilation_directory.create ~initialize_compilation_config ~in_dir)
   in
   let cleaned = false in
   let t =
@@ -201,12 +224,10 @@ let create
     ; cmx_flags
     ; cmxs_flags
     ; trigger_unused_value_warnings_despite_mli
-    ; compilation_config
+    ; compilation_directory
     ; include_directories
     ; ocamlopt_opt
-    ; camlp4o_opt
     ; ocamldep_opt
-    ; pa_files
     ; cache
     ; run_plugin_toplevel
     } in
@@ -214,16 +235,16 @@ let create
 ;;
 
 let clean_compilation_directory t =
-  if not (Lazy_deferred.is_forced t.compilation_config) then return (Ok ())
+  if not (Lazy_deferred.is_forced t.compilation_directory) then return (Ok ())
   else begin
-    Lazy_deferred.force_exn t.compilation_config >>= function
+    Lazy_deferred.force_exn t.compilation_directory >>= function
     | Error _ ->
       (* if t.compilation_config failed, then either we couldn't create the temporary
          directory, in which case there is nothing to clean, or we failed after in
          which case the temporary directory was cleaned there. Either way, things are
          fine. *)
       return (Ok ())
-    | Ok (directory, _) ->
+    | Ok { directory; _ } ->
       Shell.rm ~r:() ~f:() [directory]
   end
 ;;
@@ -268,10 +289,10 @@ sig
   val univ_constr_repr : string
 end
 
-exception No_file_to_compile with sexp
-exception Dynlink_error of string with sexp
+exception No_file_to_compile [@@deriving sexp]
+exception Dynlink_error of string [@@deriving sexp]
 
-exception Plugin_did_not_return with sexp
+exception Plugin_did_not_return [@@deriving sexp]
 type packed_plugin = E : 'a Univ_constr.t * (unit -> 'a) -> packed_plugin
 exception Return_plugin of packed_plugin
 
@@ -287,11 +308,29 @@ let preprocess_shebang ~first_line =
   else first_line
 ;;
 
+let include_directories dirs =
+  List.concat_map dirs ~f:(fun dir -> [ "-I" ; dir ])
+;;
+
+let make_pp_args ?(map_exe=Fn.id) ~include_directories:dirs preprocessor =
+  let call prog args =
+    String.concat ~sep:" " (List.map ~f:Filename.quote (map_exe prog :: args))
+  in
+  match (preprocessor : Preprocessor.t) with
+  | No_preprocessing -> []
+  | Ppx    { ppx_exe } -> [ "-pp"; call ppx_exe ["-dump-ast"] ]
+  | Camlp4 { camlp4o_opt; pa_files } ->
+    match pa_files with
+    | [] -> []
+    | cmxs ->
+      [ "-pp"; call camlp4o_opt (include_directories dirs @ cmxs) ]
+;;
+
 module Compile : sig
 
   val copy_files :
     trigger_unused_value_warnings_despite_mli:bool
-    -> working_dir:string
+    -> compilation_directory:Compilation_directory.t
     -> Plugin_uuid.t
     -> string Deferred.Or_error.t
 
@@ -303,10 +342,10 @@ module Compile : sig
     ?export:bool
     -> string -> packed_plugin Deferred.Or_error.t
 
-  val compile_and_load_file :
-    working_dir:string
-    -> t
+  val compile_and_load_file
+    :  t
     -> ?export:bool
+    -> compilation_directory:Compilation_directory.t
     -> basename:Core.Std.String.Hash_set.elt
     -> (string * packed_plugin) Async.Std.Deferred.Or_error.t
 
@@ -338,7 +377,7 @@ end = struct
 
   let copy_files
     ~trigger_unused_value_warnings_despite_mli
-    ~working_dir
+    ~(compilation_directory : Compilation_directory.t)
     plugin_uuid
   =
     let fct () =
@@ -376,7 +415,7 @@ end = struct
           end;
       in
       let target = next_filename () in
-      let full_target = working_dir ^/ target in
+      let full_target = compilation_directory.directory ^/ target in
       let with_out_channel out_channel =
         let bundles = Plugin_uuid.ml_bundles plugin_uuid in
         let last_bundle =
@@ -446,7 +485,13 @@ end = struct
     Or_error.try_with (fun () -> blocking_dynlink_exn ?export cmxs_filename)
   ;;
 
-  let compile_and_load_file ~working_dir t ?export ~basename =
+  let compile_and_load_file
+        t ?export
+        ~compilation_directory:{ Compilation_directory.
+                                 directory = working_dir
+                               ; compilation_config
+                               }
+        ~basename =
     let basename_without_ext =
       try Filename.chop_extension basename
       with Invalid_argument _ -> basename
@@ -455,21 +500,13 @@ end = struct
     let ml   = ext "ml" in
     let cmx  = ext "cmx" in
     let cmxs = ext "cmxs" in
-    let include_directories =
-      let f dir = [ "-I" ; dir ] in
-      List.concat_map ~f t.include_directories
-    in
     let pp_args =
-      match t.pa_files with
-      | [] -> []
-      | cmxs ->
-        [ "-pp" ;
-          String.concat ~sep:" " (List.map ~f:Filename.quote (
-            t.camlp4o_opt :: include_directories @ cmxs))
-        ]
+      make_pp_args
+        ~include_directories:t.include_directories
+        compilation_config.preprocessor
     in
     let create_cmx_args =
-      pp_args @ include_directories @ t.cmx_flags @ [
+      pp_args @ include_directories t.include_directories @ t.cmx_flags @ [
         "-c";
         "-o"; cmx;
         ml;
@@ -491,7 +528,7 @@ end = struct
   ;;
 end
 
-exception Usage_of_cleaned_dynloader with sexp
+exception Usage_of_cleaned_dynloader [@@deriving sexp]
 ;;
 
 let copy_source_files_to_working_dir ~source_dir ~working_dir =
@@ -525,8 +562,8 @@ let find_dependencies t filename =
      else return (Or_error.errorf "Ocaml_dynloader.find_dependencies: \
                                    argument %S is not an ml file" filename)
     ) >>=? fun () ->
-    Lazy_deferred.force_exn t.compilation_config >>=? fun (base_dir, config_opt) ->
-    let t = update_with_config t config_opt in
+    Lazy_deferred.force_exn t.compilation_directory
+    >>=? fun { directory = base_dir; compilation_config } ->
     Shell.absolute_pathname filename >>=? fun filename ->
     let source_dir = Filename.dirname filename in
     let target = Filename.chop_extension (Filename.basename filename) in
@@ -537,17 +574,11 @@ let find_dependencies t filename =
       then base_dir ^/ file
       else file
     in
-    let pp_args = match t.pa_files with
-      | [] -> []
-      | cmxs ->
-        let include_directories =
-          let f dir = [ "-I" ; dir ] in
-          List.concat_map ~f (base_dir :: t.include_directories)
-        in
-        [ "-pp" ;
-          String.concat ~sep:" " (List.map ~f:Filename.quote (
-            in_base_dir t.camlp4o_opt :: include_directories @ cmxs))
-        ]
+    let pp_args =
+      make_pp_args
+        ~map_exe:in_base_dir
+        ~include_directories:(base_dir :: t.include_directories)
+        compilation_config.preprocessor
     in
     (* we create a new directory under [base_dir] as ocamldep's working directory, when
        we copy files, we strip the shebang line. *)
@@ -576,30 +607,32 @@ let find_dependencies t filename =
 let load_ocaml_src_files_plugin_uuid ~repr t filenames =
   if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
   let compile_without_cache ml_bundles =
-    Lazy_deferred.force_exn t.compilation_config >>=? fun (working_dir, config_opt) ->
-    let t = update_with_config t config_opt in
+    Lazy_deferred.force_exn t.compilation_directory
+    >>=? fun compilation_directory ->
     let plugin_uuid = Plugin_uuid.create ~repr ~ml_bundles () in
     let trigger_unused_value_warnings_despite_mli =
       t.trigger_unused_value_warnings_despite_mli
     in
     Compile.copy_files
+      ~compilation_directory
       ~trigger_unused_value_warnings_despite_mli
-      ~working_dir
       plugin_uuid
     >>=? fun basename ->
-    Compile.compile_and_load_file ~working_dir t ~export:false ~basename
+    Compile.compile_and_load_file t ~export:false ~compilation_directory ~basename
     >>|? fun res -> plugin_uuid, res
   in
   Shell.absolute_pathnames filenames >>=? fun filenames ->
   Ml_bundle.from_filenames filenames >>=? fun ml_bundles ->
   match t.cache with
-  | None -> compile_without_cache ml_bundles >>|? fun (_, (cmxs_filename, packed_plugin)) ->
+  | None -> compile_without_cache ml_bundles
+    >>|? fun (_, (cmxs_filename, packed_plugin)) ->
     `cmxs_filename cmxs_filename, packed_plugin
   | Some cache ->
     Lazy_deferred.force_exn cache >>=? fun cache ->
     Plugin_cache.digest ml_bundles >>=? fun sources ->
     let refresh_cache () =
-      compile_without_cache ml_bundles >>=? fun (plugin_uuid, (cmxs_filename, packed_plugin)) ->
+      compile_without_cache ml_bundles
+      >>=? fun (plugin_uuid, (cmxs_filename, packed_plugin)) ->
       Plugin_cache.add cache sources plugin_uuid cmxs_filename >>|? fun () ->
       `cmxs_filename cmxs_filename, packed_plugin
     in
@@ -607,7 +640,8 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     | Some plugin -> begin
       let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
       Compile.dynlink cmxs_filename >>= function
-      | Ok packed_plugin -> Deferred.Or_error.return (`cmxs_filename cmxs_filename, packed_plugin)
+      | Ok packed_plugin ->
+        Deferred.Or_error.return (`cmxs_filename cmxs_filename, packed_plugin)
       | Error _ as error ->
         if Plugin_cache.Plugin.was_compiled_by_current_exec plugin then
           (* Rebuilding the cmxs from scratch would lead to the exact same file since we
@@ -627,8 +661,8 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     | None -> refresh_cache ()
 ;;
 
-exception Plugin_not_found of Plugin_uuid.t with sexp
-exception Type_mismatch of string * string with sexp
+exception Plugin_not_found of Plugin_uuid.t [@@deriving sexp]
+exception Type_mismatch of string * string [@@deriving sexp]
 ;;
 
 module type S = sig

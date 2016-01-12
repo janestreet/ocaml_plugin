@@ -1,0 +1,2 @@
+jadmin install to-merge ocaml_embed_compiler.exe /mnt/global/base/bin/ocaml-embed-compiler.exe
+jadmin install to-merge ocaml_embed_compiler.exe /mnt/global/base/bin/ocaml-embed-compiler-beta.exe
