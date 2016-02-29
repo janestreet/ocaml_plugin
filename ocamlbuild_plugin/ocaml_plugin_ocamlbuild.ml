@@ -14,6 +14,12 @@ let stdlib_cmi_to_embed =
   ]
 
 let embed ~program ~libraries ?(local_cmi_files=[]) ?ppx () =
+  let libraries =
+    if List.mem "ocaml_plugin" libraries then
+      libraries
+    else
+      "ocaml_plugin" :: libraries
+  in
   let target = program ^ ".archive.c" in
   let tag = "file:" ^ program in
   dep [tag] [program ^ ".archive.o"];
@@ -41,15 +47,7 @@ let embed ~program ~libraries ?(local_cmi_files=[]) ?ppx () =
            [ List.map (fun fn -> stdlib / fn) stdlib_cmi_to_embed
            ; local_cmi_files
            ; List.map (fun pkg -> (Findlib.query pkg).Findlib.location / pkg ^ ".cmi")
-               [ "core"
-               ; "core_kernel"
-               ; "async"
-               ; "async_kernel"
-               ; "async_unix"
-               ; "sexplib"
-               ; "fieldslib"
-               ; "ocaml_plugin"
-               ]
+               libraries
            ]
        in
        Cmd (S [ P ocaml_embed_compiler
