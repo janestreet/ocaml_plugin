@@ -1,3 +1,7 @@
+## 113.24.02
+
+- Added an ocamlbuild plugin to ease the creation of embed programs
+
 ## 113.24.00
 
 - Switch to ppx.

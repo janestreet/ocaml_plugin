@@ -5,3 +5,13 @@ archive(byte          ) = "ocaml_plugin.cma"
 archive(native        ) = "ocaml_plugin.cmxa"
 archive(native, plugin) = "ocaml_plugin.cmxs"
 exists_if = "ocaml_plugin.cma"
+
+package "ocamlbuild" (
+  version = "$(pkg_version)"
+  description = ""
+  requires = "ocamlbuild"
+  archive(byte          ) = "ocaml_plugin_ocamlbuild.cma"
+  archive(native        ) = "ocaml_plugin_ocamlbuild.cmxa"
+  archive(native, plugin) = "ocaml_plugin_ocamlbuild.cmxs"
+  exists_if = "ocaml_plugin_ocamlbuild.cma"
+)
