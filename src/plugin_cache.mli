@@ -11,8 +11,8 @@
    skipped if no write access).
 *)
 
-open Core.Std
-open Async.Std
+open! Core.Std
+open! Async.Std
 
 (**
    Mutable type containing information about the cached files.

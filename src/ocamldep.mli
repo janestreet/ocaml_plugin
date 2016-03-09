@@ -1,5 +1,5 @@
-open Core.Std
-open Async.Std
+open! Core.Std
+open! Async.Std
 
 (* Call ocamldep to recursively find dependencies for the [target] compilation unit,
    return a list of compilation units the [target] depends on in topological order.

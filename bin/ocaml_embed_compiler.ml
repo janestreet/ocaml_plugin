@@ -58,7 +58,7 @@ let transfer_escaped ~file ~writer =
 ;;
 
 let ocaml_plugin_archive_template : (_, _, _, _) format4 = "\
-CAMLprim value %socaml_plugin_archive (value unit __attribute__ ((unused)))
+CAMLprim value ocaml_plugin_archive (value unit __attribute__ ((unused)))
 {
   intnat dim = %d;
   int flags = CAML_BA_UINT8 | CAML_BA_C_LAYOUT | CAML_BA_EXTERNAL;
@@ -67,13 +67,13 @@ CAMLprim value %socaml_plugin_archive (value unit __attribute__ ((unused)))
 "
 
 let ocaml_plugin_archive_digest_template : (_, _, _, _) format4 = "\
-CAMLprim value %socaml_plugin_archive_digest (value unit __attribute__ ((unused)))
+CAMLprim value ocaml_plugin_archive_digest (value unit __attribute__ ((unused)))
 {
   return caml_copy_string(%S);
 }
 "
 
-let generate_c_file wrap_symbol target tar =
+let generate_c_file target tar =
   let module Digest = Plugin_cache.Digest in
   Monitor.try_with ~here:[%here] (fun () ->
     Digest.file tar >>=! fun file_digest ->
@@ -92,12 +92,11 @@ let generate_c_file wrap_symbol target tar =
       Writer.write writer "static char s[] = \"";
       transfer_escaped ~file:tar ~writer >>| fun file_length ->
       Writer.write writer "\";\n\n";
-      let wrap = if wrap_symbol then "__wrap_" else "" in
       Printf.ksprintf (Writer.write writer)
-        ocaml_plugin_archive_template wrap file_length;
+        ocaml_plugin_archive_template file_length;
       Writer.write writer "\n";
       Printf.ksprintf (Writer.write writer)
-        ocaml_plugin_archive_digest_template wrap file_digest;
+        ocaml_plugin_archive_digest_template file_digest;
     )
   )
 ;;
@@ -133,10 +132,6 @@ let command =
       +> flag "-o" (required file)
            ~doc:"<file.c> set the name of the c file to be created"
 
-      ++ step (fun k wrap_symbol -> k ~wrap_symbol)
-      +> flag "-wrap-symbol" no_arg
-           ~doc:" generate __wrap_ocaml_plugin_archive instead of ocaml_plugin_archive"
-
       ++ step (fun k verbose -> k ~verbose)
       +> flag "-verbose" no_arg ~doc:" be more verbose"
 
@@ -150,7 +145,6 @@ let command =
     ~ocamldep_opt
     ~pa_files
     ~target
-    ~wrap_symbol
     ~verbose
     ~extra_files
     () ->
@@ -214,7 +208,7 @@ let command =
   let embedded_files = Hash_set.to_list embedded_files in
   Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files:embedded_files tar >>=! fun () ->
   let tar = tmpdir ^/ tar in
-  generate_c_file wrap_symbol target tar
+  generate_c_file target tar
   >>= function
   | Error exn ->
     Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ]

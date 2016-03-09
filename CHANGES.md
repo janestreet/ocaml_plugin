@@ -1,3 +1,14 @@
+## 113.33.00
+
+- Improve the check plugin command that comes with ocaml-plugin:
+
+  1) Improve documentation, add `readme` to include more info about what is being
+  checked exactly.
+
+  2) Avoid the switch `-code-style _` for application that have made a choice of
+  code style statically.  Having the swtich available at runtime is just
+  confusing, since only 1 style is going to work anyway.
+
 ## 113.24.02
 
 - Added an ocamlbuild plugin to ease the creation of embed programs

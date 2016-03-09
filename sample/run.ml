@@ -317,8 +317,8 @@ let run_command =
 let command =
   Command.group ~summary:"Toy sample program for ocaml_plugin" [
     "run", run_command;
-    "check-plugin-v1", Config.V1.check_plugin_cmd;
-    "check-plugin-v2", Config.V2.check_plugin_cmd;
+    "check-plugin-v1", Config.V1.check_plugin_cmd ~with_code_style_switch:false ();
+    "check-plugin-v2", Config.V2.check_plugin_cmd ~with_code_style_switch:false ();
   ]
 ;;
 

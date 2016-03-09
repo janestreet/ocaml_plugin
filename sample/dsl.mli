@@ -1,4 +1,4 @@
-open Core.Std
+open! Core.Std
 open Ocaml_plugin.Std
 
 type t1

@@ -7,8 +7,8 @@
    This is meant to be used in unix only, in particular because it uses /proc to
    determine the location of the exec code being run.
 *)
-open Core.Std
-open Async.Std
+open! Core.Std
+open! Async.Std
 
 (**
    The convention over the name of the executables inside the archive.
@@ -160,8 +160,16 @@ module type S = sig
 
   (** Command that checks that the anon files given compile and match the interface [X]
       given. Also provides a [-ocamldep] mode allowing only the main file to be passed on
-      the command line. *)
-  val check_plugin_cmd : Command.t
+      the command line.
+
+      When [with_code_style_switch:false], the code style is the same as for
+      [with_compiler].  One may use [true] if both camlp4 and ppx are embedded, in which
+      case a [-code-style] flag is provided in the command line to pick between camlp4 and
+      ppx to perform the validation. *)
+  val check_plugin_cmd :
+    with_code_style_switch:bool
+    -> unit
+    -> Command.t
 
   (** [Load] contains functions similar to the ones above, and can be used if you want to
       separate extraction of the compiler from building/loading files. It can be useful if

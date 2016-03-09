@@ -554,19 +554,29 @@ let make_load_ocaml_src_files load_ocaml_src_files =
   aux
 ;;
 
-let make_check_plugin_cmd ~check_ocaml_src_files =
+let make_check_plugin_cmd
+      ~check_ocaml_src_files
+      ~load_ocaml_src_files
+      ~with_code_style_switch () =
+  let execute_plugin_toplevel_switch = "-execute-plugin-toplevel" in
   let arg_spec =
     Command.Spec.(
       empty
       +> anon (sequence ("path/to/plugin.ml" %: file))
+      +> flag execute_plugin_toplevel_switch no_arg
+           ~doc:" Run the plugin's toplevel to check for runtime errors"
       +> flag "-ocamldep" no_arg
            ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
       +> flag "-verbose" no_arg
            ~doc:" Be more verbose"
-      +> Code_style.optional_param
+      +>
+      if with_code_style_switch
+      then Code_style.optional_param
+      else return None
     )
   in
-  let main plugin_filenames use_ocamldep is_verbose code_style () =
+  let main plugin_filenames execute_plugin_toplevel use_ocamldep is_verbose code_style
+        () =
     let f compiler =
       let loader = loader compiler in
       (if use_ocamldep
@@ -581,7 +591,12 @@ let make_check_plugin_cmd ~check_ocaml_src_files =
       ) >>=? fun plugin_filenames ->
       if is_verbose then
         Print.printf "checking: %s\n%!" (String.concat ~sep:" " plugin_filenames);
-      check_ocaml_src_files loader plugin_filenames
+      if execute_plugin_toplevel
+      then
+        load_ocaml_src_files loader plugin_filenames
+        >>| Or_error.map ~f:ignore
+      else
+        check_ocaml_src_files loader plugin_filenames
     in
     with_compiler ?code_style ~f ()
     >>| function
@@ -592,7 +607,13 @@ let make_check_plugin_cmd ~check_ocaml_src_files =
       Print.eprintf "%s\n%!" (Error.to_string_hum err);
       Shutdown.shutdown 1
   in
-  Command.async ~summary:"Check a plugin for compilation/loading errors"
+  Command.async ~summary:"Check a plugin for compilation errors"
+    ~readme:(fun () -> String.concat [ "\
+This command checks that a plugin compiles.  It either succeeds quietly, or outputs
+compilation errors and fails.
+
+When it is deemed safe to execute the toplevel of a plugin, one can supply the switch
+[" ; execute_plugin_toplevel_switch ; "] to check for runtime exceptions at toplevel." ])
     arg_spec
     main
 ;;
@@ -608,7 +629,10 @@ module type S = sig
     string list -> unit Deferred.Or_error.t
   ) create_arguments
 
-  val check_plugin_cmd : Command.t
+  val check_plugin_cmd :
+    with_code_style_switch:bool
+    -> unit
+    -> Command.t
 
   module Load : Ocaml_dynloader.S with type t := t
 end
@@ -620,7 +644,9 @@ module Make (X:Ocaml_dynloader.Module_type) = struct
   ;;
 
   let check_plugin_cmd =
-    make_check_plugin_cmd ~check_ocaml_src_files:Load.check_ocaml_src_files
+    make_check_plugin_cmd
+      ~check_ocaml_src_files:Load.check_ocaml_src_files
+      ~load_ocaml_src_files:Load.load_ocaml_src_files
   ;;
 end
 
@@ -631,6 +657,8 @@ module Side_effect = struct
   ;;
 
   let check_plugin_cmd =
-    make_check_plugin_cmd ~check_ocaml_src_files:Load.check_ocaml_src_files
+    make_check_plugin_cmd
+      ~check_ocaml_src_files:Load.check_ocaml_src_files
+      ~load_ocaml_src_files:Load.load_ocaml_src_files
   ;;
 end

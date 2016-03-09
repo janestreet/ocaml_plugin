@@ -2,7 +2,7 @@
    generation and that make debugging nicer because they end up in the cache info.
 *)
 
-open Core.Std
+open! Core.Std
 
 module Repr : sig
   type t
