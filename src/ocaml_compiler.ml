@@ -304,7 +304,8 @@ end = struct
     let extract () =
       if_ persistent (fun () ->
         let lock_filename = compiler_dir ^ ".lock" in
-        Shell.mkdir_p ~perm:0o755 (Filename.dirname lock_filename) >>=? fun () ->
+        Monitor.try_with_or_error (fun () ->
+          Unix.mkdir ~p:() ~perm:0o755 (Filename.dirname lock_filename)) >>=? fun () ->
         Lock_file.Nfs.create lock_filename >>=? fun () ->
         archive_lock := Archive_lock.Locked lock_filename;
         (* Beware of race condition in here. If we are killed in the middle of rm -rf, but
@@ -313,7 +314,8 @@ end = struct
            delete the info file, then delete everything else. *)
         Shell.rm       ~f:() [ Info.info_file compiler_dir ] >>=? fun () ->
         Shell.rm ~r:() ~f:() [ compiler_dir ] >>=? fun () ->
-        Shell.mkdir_p ~perm:0o755 compiler_dir
+        Monitor.try_with_or_error (fun () ->
+          Unix.mkdir ~p:() ~perm:0o755 compiler_dir)
       ) >>=? fun () ->
       let destination = compiler_dir ^/ tar_id in
       save_archive_to destination >>=? fun () ->

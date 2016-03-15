@@ -429,7 +429,8 @@ module State = struct
     let reset_cache_if_writable info =
       if_ (not (Config.readonly t.config)) (fun () ->
         let dir = Config.dir t.config ^/ Info.cache_dir in
-        Shell.mkdir_p ~perm:Info.cache_dir_perm dir >>=? fun () ->
+        Monitor.try_with_or_error (fun () ->
+          Unix.mkdir ~p:() ~perm:Info.cache_dir_perm dir) >>=? fun () ->
         take_write_lock t >>=? fun () ->
         Info.save ~dir:config_dir Info.empty >>=? fun () ->
         parallel ~f:Plugin.clean (Info.plugins info) >>=? fun () ->
@@ -522,7 +523,8 @@ module State = struct
   let add t sources plugin_uuid filename =
     if_ (not (Config.readonly t.config)) (fun () ->
       let dir = Config.dir t.config ^/ Info.cache_dir in
-      Shell.mkdir_p ~perm:Info.cache_dir_perm dir >>=? fun () ->
+      Monitor.try_with_or_error (fun () ->
+        Unix.mkdir ~p:() ~perm:Info.cache_dir_perm dir) >>=? fun () ->
       take_write_lock t >>=? fun () ->
       let uuid = Plugin_uuid.uuid plugin_uuid in
       let cmxs_filename = dir ^/ (Uuid.to_string uuid) ^ ".cmxs" in

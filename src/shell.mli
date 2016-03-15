@@ -26,8 +26,6 @@ val run_lines :
   -> string list
   -> string list Deferred.Or_error.t
 
-val mkdir_p : ?perm:int -> string -> unit Deferred.Or_error.t
-
 val getcwd : unit -> string Deferred.Or_error.t
 
 val chmod : string -> perm:Unix.file_perm -> unit Deferred.Or_error.t
