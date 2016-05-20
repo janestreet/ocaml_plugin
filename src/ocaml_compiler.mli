@@ -24,14 +24,13 @@ val ppx_exe      : string
    the executable *)
 type t
 
-val config_file : string
-
-module Config : sig
+module Archive_metadata : sig
   type t =
     { camlp4_is_embedded : [`pa_files of string list] option
     ; ppx_is_embedded    : bool
+    ; archive_digests    : Plugin_cache.Digest.t String.Map.t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Code_style : sig
@@ -40,7 +39,7 @@ module Code_style : sig
     | `Camlp4_style
     | `Ppx_style
     ]
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val arg_type       : t Command.Arg_type.t
   val optional_param : t option Command.Spec.param

@@ -11,82 +11,21 @@ let camlp4o_opt  = "camlp4o.opt"
 let ppx_exe      = "ppx.exe"
 ;;
 
-let pervasives  = "pervasives.cmi"
-let config_file = "config.sexp"
-;;
-
 let persistent_archive_subdir = "compiler"
 ;;
 
-let mandatory_embedded_files =
-  [ ocamlopt_opt
-  ; pervasives
-  ]
-;;
-
-module Config = struct
-  (* Attempt to have maximum backward and forward compatibility mode for apps that allow
-     the use of a persistent archive *)
-  module Syntax = struct
-    type t =
-      { pa_files           : string list                       [@default []]
-      ; camlp4_is_embedded : [`pa_files of string list] option [@default None]
-      ; ppx_is_embedded    : bool                              [@default false]
-      }
-    [@@deriving sexp]
-
-    let t_of_sexp =
-      Sexp.of_sexp_allow_extra_fields t_of_sexp
-    ;;
-  end
-
+module Archive_metadata = struct
+  (* Not trying to be stable here: it's simpler and it's not clear why stability would be
+     useful: if this type changes, there is no hope that Info.is_up_to_date could return
+     [true] (because at least ocaml_plugin.cmi changes since the type is exposed, causing
+     archive_digests to differ), so whether or not we can read old versions of the type,
+     we'll re-extract the archive. *)
   type t =
     { camlp4_is_embedded : [`pa_files of string list] option
     ; ppx_is_embedded    : bool
+    ; archive_digests    : Plugin_cache.Digest.t String.Map.t
     }
-
-  include Sexpable.Of_sexpable (Syntax)
-      (struct
-        type nonrec t = t
-        let of_sexpable ({ Syntax.
-                           pa_files
-                         ; camlp4_is_embedded
-                         ; ppx_is_embedded
-                         } as syntax) =
-          { camlp4_is_embedded =
-              begin match camlp4_is_embedded with
-              | None ->
-                begin match pa_files with
-                | [] -> None
-                | _ :: _ -> Some (`pa_files pa_files)
-                end
-              | Some (`pa_files pa_files') ->
-                begin match pa_files with
-                | []   -> ()
-                | _ :: _ ->
-                  if 0 <> [%compare: string list] pa_files pa_files'
-                  then failwiths "invalid config file" syntax [%sexp_of: Syntax.t];
-                end;
-                camlp4_is_embedded
-              end
-          ; ppx_is_embedded
-          }
-        ;;
-
-        let to_sexpable { camlp4_is_embedded
-                        ; ppx_is_embedded
-                        } =
-          { Syntax.
-            camlp4_is_embedded
-          ; ppx_is_embedded
-          ; pa_files =
-              begin match camlp4_is_embedded with
-              | None -> []
-              | Some (`pa_files pa_files) -> pa_files
-              end
-          }
-        ;;
-      end)
+  [@@deriving sexp]
 end
 
 (* Map of the directories contents:
@@ -149,9 +88,10 @@ let archive () =
     Some bstr
 ;;
 
-external archive_digest_binding : unit -> string = "ocaml_plugin_archive_digest"
-let archive_digest () =
-  Plugin_cache.Digest.of_string (archive_digest_binding ())
+external archive_metadata_binding : unit -> string = "ocaml_plugin_archive_metadata"
+let archive_metadata =
+  lazy (Sexp.of_string_conv_exn (archive_metadata_binding ())
+          [%of_sexp: Archive_metadata.t])
 ;;
 
 let () =
@@ -161,8 +101,8 @@ let () =
     (* This is a way of extracting the archive from the executable. It can be used like
        this: OCAML_PLUGIN_DUMP_ARCHIVE= ./run.exe | tar -xz
        We exit to avoid running any side effects that could be done later at toplevel. *)
-    Core.Std.Printf.eprintf "archive digest: %s\n%!"
-      (Plugin_cache.Digest.to_string (archive_digest ()));
+    Core.Std.Printf.eprintf !"archive metadata: %{sexp:Archive_metadata.t}\n%!"
+      (force archive_metadata);
     begin match archive () with
     | None -> Core.Std.Printf.printf "No archive\n%!"
     | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout
@@ -180,34 +120,13 @@ let save_archive_to destination =
   )
 ;;
 
-exception Mandatory_file_not_found of string * string list [@@deriving sexp]
-;;
-
-(* Because the directory is empty before check_mandatory_files is called (modulo the
-   archive itself), it can return the contents of the archive simply by reading everything
-   in the directory (assuming the archive doesn't contain directories). *)
-let check_mandatory_files working_dir =
-  let fct () =
-    Sys.readdir working_dir
-    >>| function content_of_working_dir ->
-    let files = Array.to_list content_of_working_dir in
-    let iter file =
-      if not (List.mem ~equal:String.equal files file)
-      then raise (Mandatory_file_not_found (file, files))
-    in
-    List.iter ~f:iter mandatory_embedded_files;
-    files
-  in
-  Deferred.Or_error.try_with ~extract_exn:true fct
-;;
-
 module Code_style = struct
   type t =
     [ `No_preprocessing
     | `Camlp4_style
     | `Ppx_style
     ]
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let of_string_alist =
     [ "camlp4"           , `Camlp4_style
@@ -249,7 +168,7 @@ end = struct
     type t =
       { infos          : (string * Sexp.t) list
       ; build_info     : Sexp.t
-      ; archive_digest : Digest.t
+      ; archive_metadata : Archive_metadata.t
       }
     [@@deriving sexp]
 
@@ -268,11 +187,10 @@ end = struct
         ; "sys_argv" , [%sexp_of: string array] Sys.argv
         ]
       ) >>|? fun infos ->
-      let archive_digest = archive_digest () in
       let build_info = Params.build_info_as_sexp in
       { infos
       ; build_info
-      ; archive_digest
+      ; archive_metadata = force archive_metadata
       }
     ;;
 
@@ -292,8 +210,26 @@ end = struct
       )
     ;;
 
-    let is_up_to_date t =
-      Digest.compare (archive_digest ()) t.archive_digest = 0
+    let is_up_to_date t ~dir =
+      let digests = (force archive_metadata).archive_digests in
+      if [%compare.equal: Plugin_cache.Digest.t String.Map.t]
+           digests t.archive_metadata.archive_digests
+      then
+        (* Here we assume people won't change the contents of our files, but we could not
+           make such an assumption and check the digests instead. Or make the files
+           read-only.
+           We expect neither missing files (obviously), neither additional files
+           (like extra cmis because they can impact the build). *)
+        Deferred.Or_error.try_with (fun () -> Sys.readdir dir)
+        >>|? fun files ->
+        let files_extracted =
+          Set.diff
+            (String.Set.of_list (Array.to_list files))
+            (String.Set.of_list [ info_file_name; tar_id ])
+        in
+        let files_we_would_extract = Set.of_map_keys digests in
+        String.Set.equal files_extracted files_we_would_extract
+      else return (Ok false)
     ;;
   end
 
@@ -308,11 +244,6 @@ end = struct
           Unix.mkdir ~p:() ~perm:0o755 (Filename.dirname lock_filename)) >>=? fun () ->
         Lock_file.Nfs.create lock_filename >>=? fun () ->
         archive_lock := Archive_lock.Locked lock_filename;
-        (* Beware of race condition in here. If we are killed in the middle of rm -rf, but
-           the info file has not been deleted, then the extracted archive would be
-           corrupted because it doesn't match the info file anymore.  This is why we first
-           delete the info file, then delete everything else. *)
-        Shell.rm       ~f:() [ Info.info_file compiler_dir ] >>=? fun () ->
         Shell.rm ~r:() ~f:() [ compiler_dir ] >>=? fun () ->
         Monitor.try_with_or_error (fun () ->
           Unix.mkdir ~p:() ~perm:0o755 compiler_dir)
@@ -325,8 +256,12 @@ end = struct
     if persistent
     then Throttle.enqueue extract_throttle (fun () ->
       Info.load compiler_dir >>= function
-      | Ok info when Info.is_up_to_date info -> Deferred.Or_error.ok_unit
-      | Ok _ | Error _ -> extract ()
+      | Error _ -> extract ()
+      | Ok info ->
+        Info.is_up_to_date info ~dir:compiler_dir
+        >>= function
+        | Ok true -> Deferred.Or_error.ok_unit
+        | Error _ | Ok false -> extract ()
     )
     else
       extract ()
@@ -335,6 +270,7 @@ end
 
 let create
     ?in_dir
+    ?in_dir_perm
     ?include_directories
     ?custom_warnings_spec
     ?strict_sequence
@@ -366,7 +302,7 @@ let create
   let nostdlib flags = "-nostdlib" :: Option.value ~default:[] flags in
   let cmx_flags = nostdlib cmx_flags in
   let cmxs_flags = nostdlib cmxs_flags in
-  let preprocessor (config_opt : Config.t option) =
+  let preprocessor =
     let no_preprocessing = Ocaml_dynloader.Preprocessor.No_preprocessing in
     let camlp4 pa_files =
       Ocaml_dynloader.Preprocessor.Camlp4
@@ -377,9 +313,8 @@ let create
     let ppx =
       Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe }
     in
-    match code_style, config_opt with
-    | None, None -> Ok no_preprocessing
-    | None, Some { camlp4_is_embedded; ppx_is_embedded } ->
+    match code_style, force archive_metadata with
+    | None, { camlp4_is_embedded; ppx_is_embedded; archive_digests = _ } ->
       if ppx_is_embedded
       then Ok ppx
       else
@@ -390,43 +325,31 @@ let create
 
     | Some `No_preprocessing, _ -> Ok no_preprocessing
 
-    | Some `Camlp4_style, (None | Some {camlp4_is_embedded = None; _ }) ->
+    | Some `Camlp4_style, {camlp4_is_embedded = None; _ } ->
       Or_error.error_string "There is no embedded camlp4o_opt in the current executable"
 
-    | Some `Camlp4_style, Some {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
+    | Some `Camlp4_style, {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
       Ok (camlp4 pa_files)
 
-    | Some `Ppx_style, (None | Some {ppx_is_embedded = false; _}) ->
+    | Some `Ppx_style, {ppx_is_embedded = false; _} ->
       Or_error.error_string "There is no embedded ppx_exe in the current executable"
 
-    | Some `Ppx_style, Some {ppx_is_embedded = true; _} -> Ok ppx
+    | Some `Ppx_style, {ppx_is_embedded = true; _} -> Ok ppx
   in
-  let initialize_compilation_config ~directory:build_dir =
+  return preprocessor
+  >>=? fun preprocessor ->
+  let compilation_config = { Ocaml_dynloader.Compilation_config.preprocessor } in
+  let initialize ~directory:build_dir =
     let persistent, compiler_dir =
       match persistent_archive_dirpath with
       | None                 -> false, build_dir
       | Some archive_dirpath -> true,  archive_dirpath
     in
-    Plugin_archive.extract ~archive_lock ~persistent compiler_dir >>=? fun () ->
-    check_mandatory_files compiler_dir >>=? fun files ->
-    begin
-      if List.mem files config_file
-      then
-        Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-          Reader.load_sexp_exn (compiler_dir ^/ config_file) Config.t_of_sexp
-          >>| Option.some
-        )
-      else Deferred.return (Ok None)
-    end
-    >>=? fun config_opt ->
-    return (preprocessor config_opt)
-    >>|? fun preprocessor ->
-    { Ocaml_dynloader.Compilation_config.
-      preprocessor
-    }
+    Plugin_archive.extract ~archive_lock ~persistent compiler_dir
   in
   Ocaml_dynloader.create
     ?in_dir
+    ?in_dir_perm
     ?include_directories
     ?custom_warnings_spec
     ?strict_sequence
@@ -435,7 +358,8 @@ let create
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
     ?run_plugin_toplevel
-    ~initialize_compilation_config
+    ~initialize
+    ~compilation_config
     ~ocamlopt_opt
     ~ocamldep_opt
     ()
@@ -473,6 +397,7 @@ exception Shutting_down [@@deriving sexp]
 
 let with_compiler
     ?in_dir
+    ?in_dir_perm
     ?include_directories
     ?custom_warnings_spec
     ?strict_sequence
@@ -489,6 +414,7 @@ let with_compiler
   if shutting_down () then Deferred.Or_error.of_exn Shutting_down else begin
     create
       ?in_dir
+      ?in_dir_perm
       ?include_directories
       ?custom_warnings_spec
       ?strict_sequence
@@ -523,6 +449,7 @@ let with_compiler
 let make_load_ocaml_src_files load_ocaml_src_files =
   let aux
       ?in_dir
+      ?in_dir_perm
       ?include_directories
       ?custom_warnings_spec
       ?strict_sequence
@@ -540,6 +467,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
     in
     with_compiler
       ?in_dir
+      ?in_dir_perm
       ?include_directories
       ?custom_warnings_spec
       ?strict_sequence

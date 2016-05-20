@@ -42,6 +42,9 @@ type 'a create_arguments =
      (compilation will be faster).
   *)
 
+  -> ?in_dir_perm:Unix.file_perm
+  (** The permissions with which [in_dir] will be created.  Defaults to [0o700]. *)
+
   -> ?include_directories:string list
   (**
      If you do not use the Auto_embed mode, you want to use some cmi files
@@ -150,15 +153,18 @@ module Compilation_config : sig
 end
 
 val create : (
-  ?initialize_compilation_config:(
-    directory:string -> Compilation_config.t Deferred.Or_error.t
-  )
+  ?initialize:(directory:string -> unit Deferred.Or_error.t)
   (**
      In case we do not use the cache of cmxs, and the compilation will actually
      takes place, we offer a way via this call back to perform some computation
      before the first compilation. This is typically when [ocaml_compiler]
-     will extract its tar file and load the config embedded in the archive.
-     This defaults to using [Compilation_config.default].
+     will extract its tar file.
+  *)
+
+  -> ?compilation_config:Compilation_config.t
+  (**
+     This defaults to using [Compilation_config.default]. Typically, this flag
+     is provided by Ocaml_compiler from the metadata embedded in the executable.
   *)
 
   -> ?ocamlopt_opt:string

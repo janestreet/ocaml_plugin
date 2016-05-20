@@ -59,20 +59,18 @@ module Compilation_directory : sig
 
   type t = private
     { directory          : string
-    ; compilation_config : Compilation_config.t
     }
 
   val create
-    : initialize_compilation_config :
-        (directory:string -> Compilation_config.t Or_error.t Deferred.t)
+    : initialize : (directory:string -> unit Or_error.t Deferred.t)
     -> in_dir : string
+    -> in_dir_perm : Unix.file_perm option
     -> t Or_error.t Deferred.t
 
 end = struct
 
   type t =
     { directory          : string
-    ; compilation_config : Compilation_config.t
     }
 
   let info_file_name = "info"
@@ -130,12 +128,12 @@ end = struct
     ;;
   end
 
-  let create ~initialize_compilation_config ~in_dir =
-    Shell.temp_dir ~in_dir () >>=? fun directory ->
+  let create ~initialize ~in_dir ~in_dir_perm =
+    Shell.temp_dir ~in_dir ?perm:in_dir_perm () >>=? fun directory ->
     begin
-      initialize_compilation_config ~directory >>=? fun compilation_config ->
+      initialize ~directory >>=? fun () ->
       Info.save ~info_file:(info_file directory) >>=? fun () ->
-      return (Ok { directory; compilation_config})
+      return (Ok { directory; })
     end >>= function
     | Ok _ as ok -> return ok
     | Error e ->
@@ -154,6 +152,7 @@ type t =
   ; cmxs_flags            : string list
   ; trigger_unused_value_warnings_despite_mli : bool
   ; compilation_directory : Compilation_directory.t Or_error.t Lazy_deferred.t
+  ; compilation_config    : Compilation_config.t
   ; include_directories   : string list
   ; ocamlopt_opt          : string
   ; ocamldep_opt          : string
@@ -174,6 +173,7 @@ exception Is_not_native [@@deriving sexp]
 
 type 'a create_arguments =
   ?in_dir:string
+  -> ?in_dir_perm:Unix.file_perm
   -> ?include_directories:string list
   -> ?custom_warnings_spec:string
   -> ?strict_sequence:bool
@@ -186,6 +186,7 @@ type 'a create_arguments =
 
 let create
     ?(in_dir = Filename.temp_dir_name)
+    ?in_dir_perm
     ?(include_directories = [])
     ?(custom_warnings_spec = default_warnings_spec)
     ?(strict_sequence = true)
@@ -194,8 +195,8 @@ let create
     ?(trigger_unused_value_warnings_despite_mli = false)
     ?use_cache
     ?(run_plugin_toplevel = `In_async_thread)
-    ?(initialize_compilation_config =
-      fun ~directory:_ -> return (Ok Compilation_config.default))
+    ?(initialize = fun ~directory:_ -> return (Ok ()))
+    ?(compilation_config = Compilation_config.default)
     ?(ocamlopt_opt = Default_binaries.ocamlopt_opt)
     ?(ocamldep_opt = Default_binaries.ocamldep_opt)
     ()
@@ -216,7 +217,7 @@ let create
   in
   let compilation_directory =
     Lazy_deferred.create (fun () ->
-      Compilation_directory.create ~initialize_compilation_config ~in_dir)
+      Compilation_directory.create ~initialize ~in_dir ~in_dir_perm)
   in
   let cleaned = false in
   let t =
@@ -225,6 +226,7 @@ let create
     ; cmxs_flags
     ; trigger_unused_value_warnings_despite_mli
     ; compilation_directory
+    ; compilation_config
     ; include_directories
     ; ocamlopt_opt
     ; ocamldep_opt
@@ -489,7 +491,6 @@ end = struct
         t ?export
         ~compilation_directory:{ Compilation_directory.
                                  directory = working_dir
-                               ; compilation_config
                                }
         ~basename =
     let basename_without_ext =
@@ -503,7 +504,7 @@ end = struct
     let pp_args =
       make_pp_args
         ~include_directories:t.include_directories
-        compilation_config.preprocessor
+        t.compilation_config.preprocessor
     in
     let create_cmx_args =
       pp_args @ include_directories t.include_directories @ t.cmx_flags @ [
@@ -563,7 +564,7 @@ let find_dependencies t filename =
                                    argument %S is not an ml file" filename)
     ) >>=? fun () ->
     Lazy_deferred.force_exn t.compilation_directory
-    >>=? fun { directory = base_dir; compilation_config } ->
+    >>=? fun { directory = base_dir  } ->
     Shell.absolute_pathname filename >>=? fun filename ->
     let source_dir = Filename.dirname filename in
     let target = Filename.chop_extension (Filename.basename filename) in
@@ -578,7 +579,7 @@ let find_dependencies t filename =
       make_pp_args
         ~map_exe:in_base_dir
         ~include_directories:(base_dir :: t.include_directories)
-        compilation_config.preprocessor
+        t.compilation_config.preprocessor
     in
     (* we create a new directory under [base_dir] as ocamldep's working directory, when
        we copy files, we strip the shebang line. *)
@@ -707,7 +708,7 @@ struct
     try Ok (make_plugin ())
     with exn ->
       Or_error.tag (Or_error.of_exn exn)
-        "Exception while executing the plugin's toplevel"
+        ~tag:"Exception while executing the plugin's toplevel"
   ;;
 
   let load_ocaml_src_files t filenames =

@@ -37,6 +37,7 @@ val temp_dir
   :  in_dir:string
   -> ?prefix:string (* default: "ocaml_plugin_" *)
   -> ?suffix:string (* default: ".build" *)
+  -> ?perm:Unix.file_perm (* default: 0o700 *)
   -> unit
   -> string Deferred.Or_error.t
 

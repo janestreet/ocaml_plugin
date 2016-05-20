@@ -14,7 +14,7 @@ CAMLprim CAMLweakdef value ocaml_plugin_archive (value unit __attribute__ ((unus
   return caml_ba_alloc(flags, 1, s, &dim);
 }
 
-CAMLprim CAMLweakdef value ocaml_plugin_archive_digest (value unit __attribute__ ((unused)))
+CAMLprim CAMLweakdef value ocaml_plugin_archive_metadata (value unit __attribute__ ((unused)))
 {
   return(caml_copy_string("dummy"));
 }

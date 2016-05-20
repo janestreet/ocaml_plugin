@@ -48,7 +48,7 @@ module Config : sig
   val try_old_cache_with_new_exec : t -> bool
 
   module Stable : sig
-    module V1 : Stable
+    module V1 : Stable_without_comparator
 
     module V2 : sig
       (* Note that the sexp representation for this [t] is different than for the main
@@ -56,7 +56,7 @@ module Config : sig
          a version tag to try to upgrade more seamlessly.
       *)
       type nonrec t = t
-      include Stable with type t := t
+      include Stable_without_comparator with type t := t
 
       val of_prev : V1.t -> t
     end
