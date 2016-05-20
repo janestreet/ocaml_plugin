@@ -1,3 +1,19 @@
+## 113.43.00
+
+- In Ocaml_plugin, drop `t_of_sexp` on an unstable type not meant to expose this.
+  This was most probably added either temporarily or maybe by mistake.
+
+- Allow the specification of the permissions with which to create
+  `in_dir` (the directory where ocaml_plugin does its compilation).
+
+- If a persistent compiler archive is modified, ocaml\_plugin will probably fail at
+  compiling. Make it more robust by considering the archive invalid instead.
+  This can easily happen when deleting a bunch of cmi/cmx/exe recursively and inadvertently
+  messing up the ocaml_plugin archive.
+
+  On the way, I simplify things by passing more information from ocaml\_embed\_compiler (at
+  compile time) to ocaml_plugin (at runtime) without having to look in the archive.
+
 ## 113.33.00
 
 - Improve the check plugin command that comes with ocaml-plugin:
@@ -226,4 +242,3 @@ Bump version number
 ## 109.20.00
 
 - Removed a test that (rarely) failed nondeterministically.
-
