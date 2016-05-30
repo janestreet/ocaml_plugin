@@ -1,6 +1,6 @@
 version = "$(pkg_version)"
 description = "Automatically build and dynlink OCaml source files"
-requires = "async bin_prot core dynlink fieldslib ppx_assert.runtime-lib ppx_bench.runtime-lib ppx_expect.collector ppx_inline_test.runtime-lib sexplib typerep variantslib"
+requires = "async bin_prot core dynlink fieldslib ppx_assert.runtime-lib ppx_bench.runtime-lib ppx_expect.collector ppx_hash.runtime-lib ppx_inline_test.runtime-lib sexplib typerep variantslib"
 archive(byte  ) = "ocaml_plugin.cma"
 archive(native) = "ocaml_plugin.cmxa"
 plugin(byte  ) = "ocaml_plugin.cma"
