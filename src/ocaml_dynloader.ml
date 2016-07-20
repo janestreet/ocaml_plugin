@@ -662,7 +662,6 @@ let load_ocaml_src_files_plugin_uuid ~repr t filenames =
     | None -> refresh_cache ()
 ;;
 
-exception Plugin_not_found of Plugin_uuid.t [@@deriving sexp]
 exception Type_mismatch of string * string [@@deriving sexp]
 ;;
 
