@@ -4,7 +4,7 @@ open Async.Std
 let fold_result ~f ~init:acc =
   let rec aux acc = function
     | [] -> Or_error.return acc
-    | hd :: tl -> Or_error.bind (f acc hd) (fun acc -> aux acc tl)
+    | hd :: tl -> Or_error.bind (f acc hd) ~f:(fun acc -> aux acc tl)
   in
   aux acc
 ;;
