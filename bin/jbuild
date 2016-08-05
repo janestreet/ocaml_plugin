@@ -1,0 +1,8 @@
+(executables
+ ((names (ocaml_embed_compiler))
+  (public_release ((build_and_install ((ocaml_embed_compiler ocaml-embed-compiler)))))
+  (libraries
+   (async
+    core
+    ocaml_plugin
+    sexplib))))

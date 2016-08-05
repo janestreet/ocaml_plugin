@@ -1,0 +1,7 @@
+(library
+ ((name ocaml_plugin_ocamlbuild)
+  (wrapped false)
+  (public_name ocaml_plugin.ocamlbuild)
+  (public_release ((extra_deps (ocamlbuild))))
+  (flags (:standard -I +ocamlbuild))
+  (preprocess ((no_preprocessing All)))))

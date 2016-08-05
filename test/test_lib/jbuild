@@ -1,0 +1,3 @@
+(library
+ ((name ocaml_plugin_user_with_unit_tests)
+  (libraries (ocaml_plugin))))

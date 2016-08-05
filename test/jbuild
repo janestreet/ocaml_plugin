@@ -1,0 +1,62 @@
+(embed
+ ((names (plugin_loader))
+  (code_style bilingual)
+  (libraries
+   (async
+    core
+    core_kernel
+    fieldslib
+    sexplib))
+  (pps (JANE))))
+
+(executables
+ ((names (plugin_loader))
+  (modules (plugin_loader))
+  (libraries
+   (async
+    core
+    ocaml_plugin))
+  (preprocess (((pps ()) All)))))
+
+(alias
+ ((name runtest)
+  (deps (plugin_loader.exe
+         test_with_sexp.ml
+         test_with_sexp.mli))
+  (action "./plugin_loader.exe test_with_sexp.mli")))
+
+(alias
+ ((name runtest)
+  (deps (plugin_loader.exe
+         test_with_sexp.ml
+         test_with_sexp.mli))
+  (action "./plugin_loader.exe test_with_sexp.ml")))
+
+(alias
+ ((name runtest)
+  (deps (plugin_loader.exe
+         test_with_sexp_ppx_style.ml
+         test_with_sexp_ppx_style.mli))
+  (action "./plugin_loader.exe --ppx test_with_sexp_ppx_style.ml")))
+
+(alias
+ ((name runtest)
+  (deps (plugin_loader.exe
+         test_with_sexp.ml
+         test_with_sexp.mli
+         test_with_sexp_dep.ml
+         test_with_sexp_dep.mli))
+  (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")))
+
+(alias
+ ((name runtest)
+  (deps (plugin_loader.exe
+         test_with_sexp_ppx_style.ml
+         test_with_sexp_ppx_style.mli
+         test_with_sexp_dep_ppx_style.ml
+         test_with_sexp_dep_ppx_style.mli))
+  (action "./plugin_loader.exe --find-dependencies --ppx test_with_sexp_dep_ppx_style.ml")))
+
+(unified_tests
+ ((deps (plugin_loader.exe))
+  (setup_script setup-script)))

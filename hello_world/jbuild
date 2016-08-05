@@ -1,0 +1,20 @@
+(embed
+ ((names (run))
+  (libraries
+   (core
+    core_kernel
+    fieldslib
+    sexplib))
+  (cmis (plugin_intf))
+  (pps (JANE))
+  (code_style ppx)))
+
+(executables
+ ((names (run))
+  (libraries
+   (async
+    bin_prot
+    core
+    ocaml_plugin
+    sexplib))
+  (modules (run plugin_intf))))

@@ -1,0 +1,14 @@
+(embed
+ ((names (run))
+  (cmis (dsl))
+  (code_style ppx)))
+
+(executables
+ ((names (run))
+  (libraries (async
+                    bin_prot
+                    core
+                    core_kernel
+                    ocaml_plugin
+                    sexplib))
+  (preprocess (((pps ()) All)))))
