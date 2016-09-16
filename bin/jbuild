@@ -6,3 +6,5 @@
     core
     ocaml_plugin
     sexplib))))
+
+(provides (ocaml-embed-compiler (file ocaml_embed_compiler.exe)))

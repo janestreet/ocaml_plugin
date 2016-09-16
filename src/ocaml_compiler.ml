@@ -107,7 +107,7 @@ let () =
     | None -> Core.Std.Printf.printf "No archive\n%!"
     | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout
     end;
-    Core.Caml.Pervasives.exit 0
+    Core.Std.Caml.Pervasives.exit 0
 ;;
 
 let save_archive_to destination =
