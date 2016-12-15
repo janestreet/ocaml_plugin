@@ -60,8 +60,8 @@ end
 
 module Versioned = struct
   type t =
-  | V1 of V1.t
-  | V2 of V2.t
+    | V1 of V1.t
+    | V2 of V2.t
   [@@deriving sexp]
   let to_current = function
     | V1 v1 -> V2.of_prev v1

@@ -42,33 +42,33 @@ let cmx_flags = ref []
 let cmxs_flags = ref []
 
 (*
-  use rather a temp_dir instead of the builddir
+   use rather a temp_dir instead of the builddir
 *)
 let temp_dir = ref false
 
 (*
-  We use a flag to tell if we want to load the default files
+   We use a flag to tell if we want to load the default files
 *)
 let default = ref true
 
 (*
-  We use a flag to use the auto embed build mode
+   We use a flag to use the auto embed build mode
 *)
 let embed_mode = ref false
 
 (*
-  we use a flag to test the clean function
+   we use a flag to test the clean function
 *)
 let clean = ref false
 
 (*
-  this file is used to show what happens in case of error, e.g. typing error
+   this file is used to show what happens in case of error, e.g. typing error
 *)
 let conf_v1_error = "config/config_v1_error.ml"
 let load_error = ref false
 
 (*
-  taking file to load from command line
+   taking file to load from command line
 *)
 type file = [`v1 of string | `v2 of string | `util of string]
 
@@ -190,20 +190,20 @@ struct
       (rev_append_flags cmxs_flags)
   ;;
 
-  let all () = Command.Spec.(step (fun main -> main ())
-    ++ v1 ()
-    ++ v2 ()
-    ++ util ()
-    ++ embed ()
-    ++ error ()
-    ++ clean ()
-    ++ no_default ()
-    ++ include_dir ()
-    ++ temp_dir ()
-    ++ cmx_flag ()
-    ++ cmxs_flag ()
-    ++ Ocaml_plugin.Shell.flags ()
-  )
+  let all () =
+    Command.Spec.(step (fun main -> main ())
+                  ++ v1 ()
+                  ++ v2 ()
+                  ++ util ()
+                  ++ embed ()
+                  ++ error ()
+                  ++ clean ()
+                  ++ no_default ()
+                  ++ include_dir ()
+                  ++ temp_dir ()
+                  ++ cmx_flag ()
+                  ++ cmxs_flag ()
+                  ++ Ocaml_plugin.Shell.flags ())
   ;;
 end
 
@@ -263,11 +263,12 @@ let main () () =
     let cmxs_flags = List.rev !cmxs_flags in
     if !embed_mode
     then
-      let build = Ocaml_compiler.create
-        ~include_directories
-        ~cmx_flags
-        ~cmxs_flags
-        ()
+      let build =
+        Ocaml_compiler.create
+          ~include_directories
+          ~cmx_flags
+          ~cmxs_flags
+          ()
       in
       build >>= function
       | Error e ->

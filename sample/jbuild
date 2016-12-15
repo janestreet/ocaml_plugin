@@ -11,4 +11,6 @@
                     core_kernel
                     ocaml_plugin
                     sexplib))
-  (preprocess (((pps ()) All)))))
+  (preprocess (pps ()))))
+
+(enforce_style ())

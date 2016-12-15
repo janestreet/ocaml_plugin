@@ -41,6 +41,7 @@ let embed ~program ~libraries ?(local_cmi_files=[]) ?ppx () =
     (fun _env _build ->
        let ocaml_embed_compiler = Command.search_in_path "ocaml-embed-compiler" in
        let ocamlopt = Command.search_in_path "ocamlopt.opt" in
+       let ocamldep = Command.search_in_path "ocamldep.opt" in
        let stdlib = String.trim (Printf.ksprintf run_and_read "%s -where" ocamlopt) in
        let cmi_list =
          List.concat
@@ -52,6 +53,7 @@ let embed ~program ~libraries ?(local_cmi_files=[]) ?ppx () =
        in
        Cmd (S [ P ocaml_embed_compiler
               ; A "-cc"; A ocamlopt
+              ; A "-ocamldep"; A ocamldep
               ; ppx
               ; Command.atomize cmi_list
               ; A "-o"; A target

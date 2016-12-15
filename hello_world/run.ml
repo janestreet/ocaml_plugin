@@ -1,11 +1,11 @@
 (* simplest example for using ocaml_plugin *)
 (*
-  This is an interactive loop. It is meant to be used for small demo, testing the cache,
-  looking at the build dir while the application is still running, experimenting various
-  failure scenarios, etc.
-  run with:
-  rlwrap ./run.exe
-  enter ml filename(s) to load: plugin_001.ml
+   This is an interactive loop. It is meant to be used for small demo, testing the cache,
+   looking at the build dir while the application is still running, experimenting various
+   failure scenarios, etc.
+   run with:
+   rlwrap ./run.exe
+   enter ml filename(s) to load: plugin_001.ml
 *)
 
 open Core.Std
@@ -13,11 +13,11 @@ open Async.Std
 open Ocaml_plugin.Std
 
 module Plugin = Ocaml_dynloader.Make(struct
-  type t = (module Plugin_intf.S)
-  let t_repr = "Plugin_intf.S"
-  let univ_constr = Plugin_intf.univ_constr
-  let univ_constr_repr = "Plugin_intf.univ_constr"
-end)
+    type t = (module Plugin_intf.S)
+    let t_repr = "Plugin_intf.S"
+    let univ_constr = Plugin_intf.univ_constr
+    let univ_constr_repr = "Plugin_intf.univ_constr"
+  end)
 
 let () =
   don't_wait_for (
@@ -55,7 +55,7 @@ let () =
         | `Ok input ->
           let files = String.split ~on:' ' input in
           let files = List.filter_map files
-            ~f:(fun s -> let s = String.strip s in if s = "" then None else Some s)
+                        ~f:(fun s -> let s = String.strip s in if s = "" then None else Some s)
           in
           let with_files files =
             Plugin.load_ocaml_src_files loader files >>= function

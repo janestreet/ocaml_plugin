@@ -6,7 +6,7 @@
     fieldslib
     sexplib))
   (cmis (plugin_intf))
-  (pps (JANE))
+  (pps (ppx_jane))
   (code_style ppx)))
 
 (executables
@@ -18,3 +18,5 @@
     ocaml_plugin
     sexplib))
   (modules (run plugin_intf))))
+
+(enforce_style ())

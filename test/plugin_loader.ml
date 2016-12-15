@@ -56,9 +56,9 @@ let run
 let groups l =
   List.map (String.split ~on:'|' (String.concat l ~sep:" ")) ~f:(fun s ->
     List.filter (String.split ~on:' ' s) ~f:(function
-    | "" -> false
-    | _ -> true
-  ))
+      | "" -> false
+      | _ -> true
+    ))
 
 let max_files_default = 2
 
@@ -121,26 +121,26 @@ let command =
       +> Flags.find_dependencies ()
       +> Flags.anon_files ()
     ) (fun
-      use_cache
-      persistent_archive_dirpath
-      trigger_unused_value_warnings_despite_mli
-      ppx_flag
-      run_plugin_toplevel
-      find_dependencies
-      files
-      ()
-    ->
-      Deferred.List.iter ~how:`Sequential (groups files) ~f:(
-        run
-          ?use_cache
-          ?persistent_archive_dirpath
-          ~trigger_unused_value_warnings_despite_mli
-          ~ppx_flag
-          ~run_plugin_toplevel
-          ~find_dependencies
-      ) >>= fun () ->
-      return (Shutdown.shutdown 0)
-    )
+        use_cache
+        persistent_archive_dirpath
+        trigger_unused_value_warnings_despite_mli
+        ppx_flag
+        run_plugin_toplevel
+        find_dependencies
+        files
+        ()
+        ->
+          Deferred.List.iter ~how:`Sequential (groups files) ~f:(
+            run
+              ?use_cache
+              ?persistent_archive_dirpath
+              ~trigger_unused_value_warnings_despite_mli
+              ~ppx_flag
+              ~run_plugin_toplevel
+              ~find_dependencies
+          ) >>= fun () ->
+          return (Shutdown.shutdown 0)
+      )
 
 let () =
   Exn.handle_uncaught ~exit:true (fun () -> Command.run command)

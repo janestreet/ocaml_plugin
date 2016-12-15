@@ -16,17 +16,15 @@ type tmp_t =
   ; tmp_module_name : string
   }
 
-exception File_in_unknow_state of string [@@deriving sexp]
-
 let valid_module_name s =
   s <> "" &&
-    match s.[0] with
-    | 'A'..'Z' ->
-      String.for_all s ~f:(function
+  match s.[0] with
+  | 'A'..'Z' ->
+    String.for_all s ~f:(function
       | 'a'..'z' | 'A'..'Z' | '_' | '0'..'9' | '\'' -> true
       | _ -> false
-      )
-    | _ -> false
+    )
+  | _ -> false
 ;;
 
 let module_name ~full_path ~path_no_ext =
@@ -46,7 +44,7 @@ let enrich_bundle ({ ml; mli; module_name = _ } as bundle) =
     Sys.file_exists mli >>| function
     | `Yes -> { bundle with mli = Some mli }
     | `No -> bundle
-    | `Unknown -> raise (File_in_unknow_state mli)
+    | `Unknown -> raise_s [%sexp "File_in_unknown_state", (mli : string), [%here]]
 ;;
 
 let ml_with_mli_reorder filenames =

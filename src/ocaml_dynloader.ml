@@ -83,7 +83,7 @@ end = struct
     val save : info_file:string -> unit Or_error.t Deferred.t
   end = struct
     (*
-      save some debug info in the builddir in case this doesn't get cleaned
+       save some debug info in the builddir in case this doesn't get cleaned
     *)
 
     type t =
@@ -169,8 +169,6 @@ let next_filename () =
   s
 ;;
 
-exception Is_not_native [@@deriving sexp]
-
 type 'a create_arguments =
   ?in_dir:string
   -> ?in_dir_perm:Unix.file_perm
@@ -184,25 +182,27 @@ type 'a create_arguments =
   -> ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
   -> 'a
 
+let default_run_plugin_toplevel = `In_async_thread
+
 let create
-    ?(in_dir = Filename.temp_dir_name)
-    ?in_dir_perm
-    ?(include_directories = [])
-    ?(custom_warnings_spec = default_warnings_spec)
-    ?(strict_sequence = true)
-    ?(cmx_flags = [])
-    ?(cmxs_flags = [])
-    ?(trigger_unused_value_warnings_despite_mli = false)
-    ?use_cache
-    ?(run_plugin_toplevel = `In_async_thread)
-    ?(initialize = fun ~directory:_ -> return (Ok ()))
-    ?(compilation_config = Compilation_config.default)
-    ?(ocamlopt_opt = Default_binaries.ocamlopt_opt)
-    ?(ocamldep_opt = Default_binaries.ocamldep_opt)
-    ()
-    =
+      ?(in_dir = Filename.temp_dir_name)
+      ?in_dir_perm
+      ?(include_directories = [])
+      ?(custom_warnings_spec = default_warnings_spec)
+      ?(strict_sequence = true)
+      ?(cmx_flags = [])
+      ?(cmxs_flags = [])
+      ?(trigger_unused_value_warnings_despite_mli = false)
+      ?use_cache
+      ?(run_plugin_toplevel = default_run_plugin_toplevel)
+      ?(initialize = fun ~directory:_ -> return (Ok ()))
+      ?(compilation_config = Compilation_config.default)
+      ?(ocamlopt_opt = Default_binaries.ocamlopt_opt)
+      ?(ocamldep_opt = Default_binaries.ocamldep_opt)
+      ()
+  =
   let cmx_flags =
-    [ "-w" ; custom_warnings_spec ; "-warn-error" ; "+a" ]
+    [ "-no-alias-deps"; "-w" ; custom_warnings_spec ; "-warn-error" ; "+a" ]
     @ cmx_flags
   in
   let cmx_flags =
@@ -210,30 +210,32 @@ let create
     then "-strict-sequence" :: cmx_flags
     else cmx_flags
   in
-  if not Dynlink.is_native then Deferred.Or_error.of_exn Is_not_native else
-  Shell.absolute_pathnames include_directories >>=? fun include_directories ->
-  let cache = Option.map use_cache ~f:(fun cache_config ->
-    Lazy_deferred.create (fun () -> Plugin_cache.create cache_config))
-  in
-  let compilation_directory =
-    Lazy_deferred.create (fun () ->
-      Compilation_directory.create ~initialize ~in_dir ~in_dir_perm)
-  in
-  let cleaned = false in
-  let t =
-    { cleaned
-    ; cmx_flags
-    ; cmxs_flags
-    ; trigger_unused_value_warnings_despite_mli
-    ; compilation_directory
-    ; compilation_config
-    ; include_directories
-    ; ocamlopt_opt
-    ; ocamldep_opt
-    ; cache
-    ; run_plugin_toplevel
-    } in
-  Deferred.return (Ok t)
+  if not Dynlink.is_native
+  then return (Or_error.error_s [%sexp "Ocaml_plugin only works in native code"])
+  else (
+    Shell.absolute_pathnames include_directories >>=? fun include_directories ->
+    let cache = Option.map use_cache ~f:(fun cache_config ->
+      Lazy_deferred.create (fun () -> Plugin_cache.create cache_config))
+    in
+    let compilation_directory =
+      Lazy_deferred.create (fun () ->
+        Compilation_directory.create ~initialize ~in_dir ~in_dir_perm)
+    in
+    let cleaned = false in
+    let t =
+      { cleaned
+      ; cmx_flags
+      ; cmxs_flags
+      ; trigger_unused_value_warnings_despite_mli
+      ; compilation_directory
+      ; compilation_config
+      ; include_directories
+      ; ocamlopt_opt
+      ; ocamldep_opt
+      ; cache
+      ; run_plugin_toplevel
+      } in
+    Deferred.return (Ok t))
 ;;
 
 let clean_compilation_directory t =
@@ -283,18 +285,13 @@ module Univ_constr = struct
   let create () = Type_equal.Id.create ~name sexp_of_opaque
 end
 
-module type Module_type =
-sig
+module type Module_type = sig
   type t
   val t_repr : string
   val univ_constr : t Univ_constr.t
   val univ_constr_repr : string
 end
 
-exception No_file_to_compile [@@deriving sexp]
-exception Dynlink_error of string [@@deriving sexp]
-
-exception Plugin_did_not_return [@@deriving sexp]
 type packed_plugin = E : 'a Univ_constr.t * (unit -> 'a) -> packed_plugin
 exception Return_plugin of packed_plugin
 
@@ -378,10 +375,10 @@ end = struct
   ;;
 
   let copy_files
-    ~trigger_unused_value_warnings_despite_mli
-    ~(compilation_directory : Compilation_directory.t)
-    plugin_uuid
-  =
+        ~trigger_unused_value_warnings_despite_mli
+        ~(compilation_directory : Compilation_directory.t)
+        plugin_uuid
+    =
     let fct () =
       let repr = Plugin_uuid.repr plugin_uuid in
       let with_bundle out_channel bundle =
@@ -422,7 +419,7 @@ end = struct
         let bundles = Plugin_uuid.ml_bundles plugin_uuid in
         let last_bundle =
           match List.last bundles with
-          | None -> raise No_file_to_compile
+          | None -> raise_s [%sexp "Ocaml_plugin: No_file_to_compile"]
           | Some last -> last
         in
         let main_module_name = Ml_bundle.module_name last_bundle in
@@ -471,11 +468,12 @@ end = struct
     let loadfile = if export then Dynlink.loadfile else Dynlink.loadfile_private in
     try
       loadfile file;
-      raise Plugin_did_not_return
+      raise_s [%sexp "Ocaml_plugin: Plugin_did_not_return"]
     with
-    | Dynlink.Error e ->
-      raise (Dynlink_error (Dynlink.error_message e))
     | Return_plugin packed_plugin -> packed_plugin
+    | Dynlink.Error e ->
+      raise_s [%sexp "Ocaml_plugin: Dynlink_error", (Dynlink.error_message e : string)]
+
   ;;
 
   let dynlink ?export cmxs_filename =
@@ -529,16 +527,13 @@ end = struct
   ;;
 end
 
-exception Usage_of_cleaned_dynloader [@@deriving sexp]
-;;
-
 let copy_source_files_to_working_dir ~source_dir ~working_dir =
   Deferred.Or_error.try_with (fun () ->
     Sys.ls_dir source_dir >>| List.filter ~f:(fun file ->
       (* We filter out some files created by emacs with names like ".#fool.ml" that we
          would fail to read because they are dead symlinks. *)
       not (String.is_prefix file ~prefix:".")
-      &&  (   String.is_suffix file ~suffix:".ml"
+      &&  (String.is_suffix file ~suffix:".ml"
            || String.is_suffix file ~suffix:".mli"
           )
     ) >>= fun all_ocaml_files ->
@@ -557,7 +552,9 @@ let copy_source_files_to_working_dir ~source_dir ~working_dir =
 ;;
 
 let find_dependencies t filename =
-  if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
+  if t.cleaned
+  then return (Or_error.error_s [%sexp "Usage_of_cleaned_dynloader", [%here]])
+  else (
     (if Filename.check_suffix filename ".ml"
      then return (Ok ())
      else return (Or_error.errorf "Ocaml_dynloader.find_dependencies: \
@@ -602,67 +599,66 @@ let find_dependencies t filename =
        | `No -> Ok [ ml ]
        | `Unknown -> Or_error.errorf "File in unknown state: %s" mli
      ) >>| Or_error.all)
-    >>|? List.concat
+    >>|? List.concat)
 ;;
 
 let load_ocaml_src_files_plugin_uuid ~repr t filenames =
-  if t.cleaned then Deferred.Or_error.of_exn Usage_of_cleaned_dynloader else
-  let compile_without_cache ml_bundles =
-    Lazy_deferred.force_exn t.compilation_directory
-    >>=? fun compilation_directory ->
-    let plugin_uuid = Plugin_uuid.create ~repr ~ml_bundles () in
-    let trigger_unused_value_warnings_despite_mli =
-      t.trigger_unused_value_warnings_despite_mli
+  if t.cleaned
+  then return (Or_error.error_s [%sexp "Usage_of_cleaned_dynloader", [%here]])
+  else (
+    let compile_without_cache ml_bundles =
+      Lazy_deferred.force_exn t.compilation_directory
+      >>=? fun compilation_directory ->
+      let plugin_uuid = Plugin_uuid.create ~repr ~ml_bundles () in
+      let trigger_unused_value_warnings_despite_mli =
+        t.trigger_unused_value_warnings_despite_mli
+      in
+      Compile.copy_files
+        ~compilation_directory
+        ~trigger_unused_value_warnings_despite_mli
+        plugin_uuid
+      >>=? fun basename ->
+      Compile.compile_and_load_file t ~export:false ~compilation_directory ~basename
+      >>|? fun res -> plugin_uuid, res
     in
-    Compile.copy_files
-      ~compilation_directory
-      ~trigger_unused_value_warnings_despite_mli
-      plugin_uuid
-    >>=? fun basename ->
-    Compile.compile_and_load_file t ~export:false ~compilation_directory ~basename
-    >>|? fun res -> plugin_uuid, res
-  in
-  Shell.absolute_pathnames filenames >>=? fun filenames ->
-  Ml_bundle.from_filenames filenames >>=? fun ml_bundles ->
-  match t.cache with
-  | None -> compile_without_cache ml_bundles
-    >>|? fun (_, (cmxs_filename, packed_plugin)) ->
-    `cmxs_filename cmxs_filename, packed_plugin
-  | Some cache ->
-    Lazy_deferred.force_exn cache >>=? fun cache ->
-    Plugin_cache.digest ml_bundles >>=? fun sources ->
-    let refresh_cache () =
-      compile_without_cache ml_bundles
-      >>=? fun (plugin_uuid, (cmxs_filename, packed_plugin)) ->
-      Plugin_cache.add cache sources plugin_uuid cmxs_filename >>|? fun () ->
+    Shell.absolute_pathnames filenames >>=? fun filenames ->
+    Ml_bundle.from_filenames filenames >>=? fun ml_bundles ->
+    match t.cache with
+    | None -> compile_without_cache ml_bundles
+      >>|? fun (_, (cmxs_filename, packed_plugin)) ->
       `cmxs_filename cmxs_filename, packed_plugin
-    in
-    match Plugin_cache.find cache sources with
-    | Some plugin -> begin
-      let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
-      Compile.dynlink cmxs_filename >>= function
-      | Ok packed_plugin ->
-        Deferred.Or_error.return (`cmxs_filename cmxs_filename, packed_plugin)
-      | Error _ as error ->
-        if Plugin_cache.Plugin.was_compiled_by_current_exec plugin then
-          (* Rebuilding the cmxs from scratch would lead to the exact same file since we
-             have the same exec that the one that was used to build the same
-             sources. Thus, the result of the dynlink would the same anyway, something
-             else should be wrong. *)
-          Deferred.return error
-        else
-          (* In that case, since the exec has changed since the last time it was used to
-             build this cache, we might have a chance that dynlinking a freshly rebuilt
-             cmxs file would actually succeed.
-             In the case where the plugin dynlinked normally but raises an exception at
-             toplevel, we will go through this branch and recompile it a second time. It
-             is probably fine though. *)
-          refresh_cache ()
-    end
-    | None -> refresh_cache ()
-;;
-
-exception Type_mismatch of string * string [@@deriving sexp]
+    | Some cache ->
+      Lazy_deferred.force_exn cache >>=? fun cache ->
+      Plugin_cache.digest ml_bundles >>=? fun sources ->
+      let refresh_cache () =
+        compile_without_cache ml_bundles
+        >>=? fun (plugin_uuid, (cmxs_filename, packed_plugin)) ->
+        Plugin_cache.add cache sources plugin_uuid cmxs_filename >>|? fun () ->
+        `cmxs_filename cmxs_filename, packed_plugin
+      in
+      match Plugin_cache.find cache sources with
+      | Some plugin -> begin
+          let cmxs_filename = Plugin_cache.Plugin.cmxs_filename plugin in
+          Compile.dynlink cmxs_filename >>= function
+          | Ok packed_plugin ->
+            Deferred.Or_error.return (`cmxs_filename cmxs_filename, packed_plugin)
+          | Error _ as error ->
+            if Plugin_cache.Plugin.was_compiled_by_current_exec plugin then
+              (* Rebuilding the cmxs from scratch would lead to the exact same file since
+                 we have the same exec that the one that was used to build the same
+                 sources. Thus, the result of the dynlink would the same anyway, something
+                 else should be wrong. *)
+              Deferred.return error
+            else
+              (* In that case, since the exec has changed since the last time it was used
+                 to build this cache, we might have a chance that dynlinking a freshly
+                 rebuilt cmxs file would actually succeed.  In the case where the plugin
+                 dynlinked normally but raises an exception at toplevel, we will go
+                 through this branch and recompile it a second time. It is probably fine
+                 though. *)
+              refresh_cache ()
+        end
+      | None -> refresh_cache ())
 ;;
 
 module type S = sig
@@ -671,12 +667,18 @@ module type S = sig
     dynloader -> string list -> t Deferred.Or_error.t
   val check_ocaml_src_files :
     dynloader -> string list -> unit Deferred.Or_error.t
-  val compile_ocaml_src_files_into_cmxs_file
-    : dynloader
-    -> string list
-    -> output_file:string
-    -> unit Deferred.Or_error.t
-  val blocking_load_cmxs_file : string -> t Or_error.t
+  module Expert : sig
+    val compile_ocaml_src_files_into_cmxs_file
+      : dynloader
+      -> string list
+      -> output_file:string
+      -> unit Deferred.Or_error.t
+    val load_cmxs_file
+      :  ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
+      -> string
+      -> t Or_error.t Deferred.t
+    val blocking_load_cmxs_file : string -> t Or_error.t
+  end
 end
 ;;
 
@@ -685,12 +687,14 @@ struct
 
   let type_check plugin_type =
     (* There is an hidden invariant there: if the OCaml compilation succeed, that means
-       that the loaded module has the type represented in X.repr, so the [Univ.match_]
-       will succeed. Of course this is only true is the user gave a valid Module_type in
-       the first place. *)
+       that the loaded module has the type represented in [X.repr], so the [Univ.match_]
+       will succeed.  Of course this is only true is the user gave a valid [Module_type]
+       in the first place. *)
     match Type_equal.Id.same_witness plugin_type X.univ_constr with
-    | None -> Or_error.of_exn (Type_mismatch (X.t_repr, X.univ_constr_repr))
     | Some witness -> Ok witness
+    | None ->
+      Or_error.error_s
+        [%sexp "Type_mismatch", (X.t_repr : string), (X.univ_constr_repr : string)]
   ;;
 
   let load_and_type_ocaml_src_files_without_running_them t filenames =
@@ -724,25 +728,42 @@ struct
     ()
   ;;
 
-  let compile_ocaml_src_files_into_cmxs_file t filenames ~output_file =
-    load_and_type_ocaml_src_files_without_running_them t filenames
-    >>=? fun (`cmxs_filename cmxs_filename, (_ : unit -> X.t)) ->
-    Shell.cp ~source:cmxs_filename ~dest:output_file
-  ;;
+  module Expert = struct
+    let compile_ocaml_src_files_into_cmxs_file t filenames ~output_file =
+      load_and_type_ocaml_src_files_without_running_them t filenames
+      >>=? fun (`cmxs_filename cmxs_filename, (_ : unit -> X.t)) ->
+      Shell.cp ~source:cmxs_filename ~dest:output_file
+    ;;
 
-  let blocking_load_cmxs_file cmxs_filename : X.t Or_error.t =
-    if not (Scheduler.is_ready_to_initialize ())
-    then Or_error.error_string
-           "blocking_load_cmxs_file can only be called \
-            when Async scheduler isn't initialized"
-    else
-      match Compile.blocking_dynlink cmxs_filename with
-      | Error _ as e -> e
-      | Ok (E (plugin_type, make_plugin)) ->
-        match type_check plugin_type with
+    let blocking_load_cmxs_file cmxs_filename : X.t Or_error.t =
+      if not (Scheduler.is_ready_to_initialize ())
+      then Or_error.error_string
+             "blocking_load_cmxs_file can only be called \
+              when Async scheduler isn't initialized"
+      else
+        match Compile.blocking_dynlink cmxs_filename with
         | Error _ as e -> e
-        | Ok Type_equal.T -> run make_plugin
-  ;;
+        | Ok (E (plugin_type, make_plugin)) ->
+          match type_check plugin_type with
+          | Error _ as e -> e
+          | Ok Type_equal.T -> run make_plugin
+    ;;
+
+    let load_cmxs_file
+          ?(run_plugin_toplevel = default_run_plugin_toplevel)
+          cmxs_filename
+      =
+      Compile.dynlink cmxs_filename
+      >>=? fun (E (plugin_type, make_plugin)) ->
+      match type_check plugin_type with
+      | Error _ as e -> return e
+      | Ok Type_equal.T ->
+        let make_plugin : unit -> X.t = make_plugin in
+        match run_plugin_toplevel with
+        | `In_async_thread  -> Deferred.return (run make_plugin)
+        | `Outside_of_async -> In_thread.run (fun () -> run make_plugin)
+    ;;
+  end
 end
 
 module type Side_effect = sig
@@ -752,20 +773,29 @@ let side_effect_univ_constr = Univ_constr.create ()
 ;;
 
 module Side_effect_loader = Make(struct
-  type t = (module Side_effect)
-  let t_repr = "Ocaml_plugin.Ocaml_dynloader.Side_effect"
-  let univ_constr = side_effect_univ_constr
-  let univ_constr_repr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
-end)
+    type t = (module Side_effect)
+    let t_repr = "Ocaml_plugin.Ocaml_dynloader.Side_effect"
+    let univ_constr = side_effect_univ_constr
+    let univ_constr_repr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
+  end)
 
 module Side_effect = struct
-  include Side_effect_loader
+  open Side_effect_loader
+  let check_ocaml_src_files = check_ocaml_src_files
   let load_ocaml_src_files t filenames =
     load_ocaml_src_files t filenames
     >>|? fun (_ : (module Side_effect)) -> ()
   ;;
-  let blocking_load_cmxs_file filename =
-    blocking_load_cmxs_file filename
-    |> (Or_error.ignore : (module Side_effect) Or_error.t -> unit Or_error.t)
-  ;;
+  module Expert = struct
+    let compile_ocaml_src_files_into_cmxs_file =
+      Expert.compile_ocaml_src_files_into_cmxs_file
+    let blocking_load_cmxs_file filename =
+      Expert.blocking_load_cmxs_file filename
+      |> (Or_error.ignore : (module Side_effect) Or_error.t -> unit Or_error.t)
+    ;;
+    let load_cmxs_file ?run_plugin_toplevel filename =
+      Expert.load_cmxs_file ?run_plugin_toplevel filename
+      >>|? fun (_ : (module Side_effect)) -> ()
+    ;;
+  end
 end

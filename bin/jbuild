@@ -1,10 +1,16 @@
 (executables
  ((names (ocaml_embed_compiler))
-  (public_release ((build_and_install ((ocaml_embed_compiler ocaml-embed-compiler)))))
   (libraries
    (async
     core
     ocaml_plugin
     sexplib))))
+
+(install
+ ((section bin)
+  (files
+   ((ocaml_embed_compiler.exe as ocaml-embed-compiler)))))
+
+(enforce_style ())
 
 (provides (ocaml-embed-compiler (file ocaml_embed_compiler.exe)))

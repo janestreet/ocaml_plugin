@@ -55,60 +55,57 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
     Core.Std.Printf.printf "Shell: %s\n%!" (force command_text);
 
   Process.create ?working_dir ~prog ~args () >>=? fun process ->
-    Process.collect_output_and_wait process >>| fun output ->
-    let { Process.Output.stdout ; stderr ; exit_status } = output in
+  Process.collect_output_and_wait process >>| fun output ->
+  let { Process.Output.stdout ; stderr ; exit_status } = output in
 
-    let error_and_status =
-      match exit_status with
-      | Error status -> Error (Some status)
-      | Ok () ->
-        if quiet_or_error && (stdout <> "" || stderr <> "")
-        then Error None
-        else Ok ()
-    in
-    if !verbose then (
-      Core.Std.Printf.printf "%s%s%!" (endline stdout) (endline stderr);
-    );
-    match error_and_status with
+  let error_and_status =
+    match exit_status with
+    | Error status -> Error (Some status)
     | Ok () ->
-      Ok (from_output output)
-    | Error status ->
-      let working_dir =
-        match working_dir with
-        | Some working_dir -> working_dir
-        | None -> "none (cwd)"
+      if quiet_or_error && (stdout <> "" || stderr <> "")
+      then Error None
+      else Ok ()
+  in
+  if !verbose then (
+    Core.Std.Printf.printf "%s%s%!" (endline stdout) (endline stderr);
+  );
+  match error_and_status with
+  | Ok () ->
+    Ok (from_output output)
+  | Error status ->
+    let working_dir =
+      match working_dir with
+      | Some working_dir -> working_dir
+      | None -> "none (cwd)"
+    in
+    let error = Error.of_lazy (lazy (
+      (* not using an sexp_of_t because it makes the output unreadable by escaping
+         newlines *)
+      let status =
+        match status with
+        | Some status -> Sexp.to_string
+                           ([%sexp_of: Core.Std.Unix.Exit_or_signal.error] status)
+        | None -> "error trace on stdout or stderr"
       in
-      let error = Error.of_lazy (lazy (
-        (* not using an sexp_of_t because it makes the output unreadable by escaping
-           newlines *)
-        let status =
-          match status with
-          | Some status -> Sexp.to_string
-            ([%sexp_of: Core.Std.Unix.Exit_or_signal.error] status)
-          | None -> "error trace on stdout or stderr"
-        in
-        sprintf "working_dir: %s\nstatus: %s\ncommand: %s\n%s%s"
-          working_dir
-          status
-          (force command_text)
-          stdout
-          (if stdout = "" then stderr else "\n"^stderr)
-      ))
-      in
-      Error error
+      sprintf "working_dir: %s\nstatus: %s\ncommand: %s\n%s%s"
+        working_dir
+        status
+        (force command_text)
+        stdout
+        (if stdout = "" then stderr else "\n"^stderr)
+    ))
+    in
+    Error error
 ;;
 
 let run = make_run ignore
 ;;
 
-let run_lines = make_run ~quiet_or_error:false
-  (function { Process.Output.stdout ; _ } ->
-    let list = String.split ~on:'\n' stdout in
-    let list = List.filter_map list
-      ~f:(fun s -> let s = String.rstrip s in if s = "" then None else Some s)
-    in
-    list
-  )
+let run_lines =
+  make_run ~quiet_or_error:false
+    (function { Process.Output.stdout ; _ } ->
+       List.filter_map (String.split ~on:'\n' stdout)
+         ~f:(fun s -> let s = String.rstrip s in if s = "" then None else Some s))
 ;;
 
 let getcwd () =
@@ -137,7 +134,7 @@ let absolute_pathname filename =
   if Filename.is_relative filename
   then
     getcwd () >>|? fun prefix ->
-      prefix ^/ filename
+    prefix ^/ filename
   else
     Deferred.return (Ok filename)
 ;;
@@ -153,11 +150,11 @@ let absolute_pathnames filenames =
   if !relative
   then (
     getcwd () >>|? fun cwd ->
-      let files = List.rev_map filenames ~f:(function
-        | `absolute filename -> filename
-        | `relative filename -> cwd ^/ filename
-      ) in
-      files
+    let files = List.rev_map filenames ~f:(function
+      | `absolute filename -> filename
+      | `relative filename -> cwd ^/ filename
+    ) in
+    files
   )
   else
     let files = List.rev_map filenames ~f:(function

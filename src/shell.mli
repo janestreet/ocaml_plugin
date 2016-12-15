@@ -2,15 +2,11 @@ open! Core.Std
 open! Async.Std
 
 
-(*
-  Global properties regarding bash sys calls. Echo would print the command before running
-  them, and verbose would print the full output of the command.
-*)
+(** Global properties regarding bash sys calls. Echo would print the command before
+    running them, and verbose would print the full output of the command. *)
 val set_defaults : ?verbose:bool -> ?echo:bool -> unit -> unit
 
-(**
-   Offers a command line spec to set verbose and echo directly.
-*)
+(** Offers a command line spec to set verbose and echo directly. *)
 val flags : unit -> ('a, 'a) Command.Spec.t
 
 val run :
@@ -30,9 +26,7 @@ val getcwd : unit -> string Deferred.Or_error.t
 
 val chmod : string -> perm:Unix.file_perm -> unit Deferred.Or_error.t
 
-(**
-   When this function succeed, it returns a absolute pathname.
-*)
+(** When this function succeed, it returns a absolute pathname. *)
 val temp_dir
   :  in_dir:string
   -> ?prefix:string (* default: "ocaml_plugin_" *)

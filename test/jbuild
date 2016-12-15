@@ -7,7 +7,7 @@
     core_kernel
     fieldslib
     sexplib))
-  (pps (JANE))))
+  (pps (ppx_jane))))
 
 (executables
  ((names (plugin_loader))
@@ -16,7 +16,9 @@
    (async
     core
     ocaml_plugin))
-  (preprocess (((pps ()) All)))))
+  (preprocess (pps ()))))
+
+(enforce_style ())
 
 (alias
  ((name runtest)

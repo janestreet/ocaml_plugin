@@ -30,24 +30,27 @@ end
 
 (* Map of the directories contents:
    - build_dir: /tmp/ocaml_plugin_XXXXX/{m_dyn_1_.ml,m_dyn_1_.o,m_dyn_1_.cmx,m_dyn_1_.cmxs,...}
-     Deleted on clean up.
+   Deleted on clean up.
+
    - compiler_dir:
-       Either /tmp/ocaml_plugin_XXXXX/{ocamlopt.opt,pervasives.cmi,pa_sexp_conv.cmo,...}
-       or $user_specified_dir/compiler/{archive-info.sexp,the other files}.
-       Locked if it is shared using $user_specified_dir/compiler.lock. Deleted on clean up
-       if they are the same directory otherwise deleted when the digest of the archive
-       doesn't match the info anymore.
+   Either /tmp/ocaml_plugin_XXXXX/{ocamlopt.opt,pervasives.cmi,pa_sexp_conv.cmo,...}
+   or $user_specified_dir/compiler/{archive-info.sexp,the other files}.
+   Locked if it is shared using $user_specified_dir/compiler.lock. Deleted on clean up
+   if they are the same directory otherwise deleted when the digest of the archive
+   doesn't match the info anymore.
+
    - cache dir:
-       $user_specified_dir/cmxs-cache/{cache-info.sexp, abcd-efgh-ijkl-mnop.cmxs}
-       copied there from build_dir
-       Locked because it can be shared using $user_specified_dir/cmxs-cache.lock.
+   $user_specified_dir/cmxs-cache/{cache-info.sexp, abcd-efgh-ijkl-mnop.cmxs}
+   copied there from build_dir
+   Locked because it can be shared using $user_specified_dir/cmxs-cache.lock.
+
    Both locks are released on clean up. *)
 
 module Archive_lock = struct
   type t =
-  | Cleaned
-  | Cleaning of unit Deferred.Or_error.t
-  | Locked of string
+    | Cleaned
+    | Cleaning of unit Deferred.Or_error.t
+    | Locked of string
 end
 
 type t =
@@ -59,14 +62,14 @@ type t =
 let clean t =
   Ocaml_dynloader.clean t.loader >>= fun r1 ->
   (match t.archive_lock.contents with
-  | Archive_lock.Cleaned -> Deferred.Or_error.ok_unit
-  | Archive_lock.Cleaning def -> def
-  | Archive_lock.Locked lock_filename ->
-    let clean = Lock_file.Nfs.unlock lock_filename in
-    t.archive_lock.contents <- Archive_lock.Cleaning clean;
-    clean >>| fun res ->
-    t.archive_lock.contents <- Archive_lock.Cleaned;
-    res)
+   | Archive_lock.Cleaned -> Deferred.Or_error.ok_unit
+   | Archive_lock.Cleaning def -> def
+   | Archive_lock.Locked lock_filename ->
+     let clean = Lock_file.Nfs.unlock lock_filename in
+     t.archive_lock.contents <- Archive_lock.Cleaning clean;
+     clean >>| fun res ->
+     t.archive_lock.contents <- Archive_lock.Cleaned;
+     res)
   >>| fun r2 ->
   Or_error.combine_errors_unit
     [ r1
@@ -90,8 +93,15 @@ let archive () =
 
 external archive_metadata_binding : unit -> string = "ocaml_plugin_archive_metadata"
 let archive_metadata =
-  lazy (Sexp.of_string_conv_exn (archive_metadata_binding ())
-          [%of_sexp: Archive_metadata.t])
+  lazy (
+    let str = archive_metadata_binding () in
+    let dummy = "dummy" in
+    if String.equal str dummy
+    then Or_error.error_string "\
+This executable does not have an embedded archive, although this is required when using \
+[Ocaml_plugin].  A likely cause is that the build of the binary is missing the step \
+involving [ocaml_embed_compiler]."
+    else Ok (Sexp.of_string_conv_exn str [%of_sexp: Archive_metadata.t]))
 ;;
 
 let () =
@@ -101,13 +111,15 @@ let () =
     (* This is a way of extracting the archive from the executable. It can be used like
        this: OCAML_PLUGIN_DUMP_ARCHIVE= ./run.exe | tar -xz
        We exit to avoid running any side effects that could be done later at toplevel. *)
-    Core.Std.Printf.eprintf !"archive metadata: %{sexp:Archive_metadata.t}\n%!"
-      (force archive_metadata);
-    begin match archive () with
-    | None -> Core.Std.Printf.printf "No archive\n%!"
-    | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout
-    end;
-    Core.Std.Caml.Pervasives.exit 0
+    (match force archive_metadata with
+     | Error _ -> Core.Std.Printf.eprintf "No archive metadata\n%!"
+     | Ok archive_metadata ->
+       Core.Std.Printf.eprintf !"archive metadata: %{sexp:Archive_metadata.t}\n%!"
+         archive_metadata);
+    (match archive () with
+     | None -> Core.Std.Printf.printf "No archive\n%!"
+     | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout);
+    Core.Caml.Pervasives.exit 0
 ;;
 
 let save_archive_to destination =
@@ -116,8 +128,7 @@ let save_archive_to destination =
     | None -> failwith "There is no embedded compiler in the current executable"
     | Some contents -> Writer.with_file_atomic destination ~f:(fun w ->
       Writer.schedule_bigstring w contents;
-      Deferred.unit)
-  )
+      Deferred.unit))
 ;;
 
 module Code_style = struct
@@ -179,6 +190,7 @@ end = struct
     ;;
 
     let create () =
+      return (force archive_metadata) >>=? fun archive_metadata ->
       Deferred.Or_error.try_with ~extract_exn:true (fun () ->
         Unix.getlogin () >>| fun login ->
         [ "version"  , sexp_of_string Params.version
@@ -190,7 +202,7 @@ end = struct
       let build_info = Params.build_info_as_sexp in
       { infos
       ; build_info
-      ; archive_metadata = force archive_metadata
+      ; archive_metadata
       }
     ;;
 
@@ -211,25 +223,27 @@ end = struct
     ;;
 
     let is_up_to_date t ~dir =
-      let digests = (force archive_metadata).archive_digests in
-      if [%compare.equal: Plugin_cache.Digest.t String.Map.t]
-           digests t.archive_metadata.archive_digests
-      then
-        (* Here we assume people won't change the contents of our files, but we could not
-           make such an assumption and check the digests instead. Or make the files
-           read-only.
-           We expect neither missing files (obviously), neither additional files
-           (like extra cmis because they can impact the build). *)
-        Deferred.Or_error.try_with (fun () -> Sys.readdir dir)
-        >>|? fun files ->
-        let files_extracted =
-          Set.diff
-            (String.Set.of_list (Array.to_list files))
-            (String.Set.of_list [ info_file_name; tar_id ])
-        in
-        let files_we_would_extract = Set.of_map_keys digests in
-        String.Set.equal files_extracted files_we_would_extract
-      else return (Ok false)
+      match force archive_metadata with
+      | Error _ as error -> return error
+      | Ok archive_metadata ->
+        let digests = archive_metadata.archive_digests in
+        if [%compare.equal: Plugin_cache.Digest.t String.Map.t]
+             digests t.archive_metadata.archive_digests
+        then (
+          (* Here we assume people won't change the contents of our files, but we could
+             not make such an assumption and check the digests instead. Or make the files
+             read-only.  We expect neither missing files (obviously), neither additional
+             files (like extra cmis because they can impact the build). *)
+          Deferred.Or_error.try_with (fun () -> Sys.readdir dir)
+          >>|? fun files ->
+          let files_extracted =
+            Set.diff
+              (String.Set.of_list (Array.to_list files))
+              (String.Set.of_list [ info_file_name; tar_id ])
+          in
+          let files_we_would_extract = Set.of_map_keys digests in
+          String.Set.equal files_extracted files_we_would_extract)
+        else return (Ok false)
     ;;
   end
 
@@ -269,25 +283,25 @@ end = struct
 end
 
 let create
-    ?in_dir
-    ?in_dir_perm
-    ?include_directories
-    ?custom_warnings_spec
-    ?strict_sequence
-    ?cmx_flags
-    ?cmxs_flags
-    ?trigger_unused_value_warnings_despite_mli
-    ?use_cache
-    ?run_plugin_toplevel
-    ?code_style
-    ?persistent_archive_dirpath
-    () =
+      ?in_dir
+      ?in_dir_perm
+      ?include_directories
+      ?custom_warnings_spec
+      ?strict_sequence
+      ?cmx_flags
+      ?cmxs_flags
+      ?trigger_unused_value_warnings_despite_mli
+      ?use_cache
+      ?run_plugin_toplevel
+      ?code_style
+      ?persistent_archive_dirpath
+      () =
   let archive_lock = ref Archive_lock.Cleaned in
   (match persistent_archive_dirpath with
-  | None     -> Deferred.return (Ok None)
-  | Some path ->
-    Shell.absolute_pathname path >>|? fun path ->
-    Some (path ^/ persistent_archive_subdir)
+   | None     -> Deferred.return (Ok None)
+   | Some path ->
+     Shell.absolute_pathname path >>|? fun path ->
+     Some (path ^/ persistent_archive_subdir)
   ) >>=? fun persistent_archive_dirpath ->
   let in_compiler_dir exec =
     Option.value persistent_archive_dirpath ~default:"." ^/ exec
@@ -313,28 +327,31 @@ let create
     let ppx =
       Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe }
     in
-    match code_style, force archive_metadata with
-    | None, { camlp4_is_embedded; ppx_is_embedded; archive_digests = _ } ->
-      if ppx_is_embedded
-      then Ok ppx
-      else
-        begin match camlp4_is_embedded with
-        | Some (`pa_files pa_files) -> Ok (camlp4 pa_files)
-        | None -> Ok no_preprocessing
-        end
+    match force archive_metadata with
+    | Error _ as error -> error
+    | Ok archive_metadata ->
+      match code_style, archive_metadata with
+      | None, { camlp4_is_embedded; ppx_is_embedded; archive_digests = _ } ->
+        if ppx_is_embedded
+        then Ok ppx
+        else
+          begin match camlp4_is_embedded with
+          | Some (`pa_files pa_files) -> Ok (camlp4 pa_files)
+          | None -> Ok no_preprocessing
+          end
 
-    | Some `No_preprocessing, _ -> Ok no_preprocessing
+      | Some `No_preprocessing, _ -> Ok no_preprocessing
 
-    | Some `Camlp4_style, {camlp4_is_embedded = None; _ } ->
-      Or_error.error_string "There is no embedded camlp4o_opt in the current executable"
+      | Some `Camlp4_style, {camlp4_is_embedded = None; _ } ->
+        Or_error.error_string "There is no embedded camlp4o_opt in the current executable"
 
-    | Some `Camlp4_style, {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
-      Ok (camlp4 pa_files)
+      | Some `Camlp4_style, {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
+        Ok (camlp4 pa_files)
 
-    | Some `Ppx_style, {ppx_is_embedded = false; _} ->
-      Or_error.error_string "There is no embedded ppx_exe in the current executable"
+      | Some `Ppx_style, {ppx_is_embedded = false; _} ->
+        Or_error.error_string "There is no embedded ppx_exe in the current executable"
 
-    | Some `Ppx_style, {ppx_is_embedded = true; _} -> Ok ppx
+      | Some `Ppx_style, {ppx_is_embedded = true; _} -> Ok ppx
   in
   return preprocessor
   >>=? fun preprocessor ->
@@ -377,41 +394,40 @@ let created_but_not_cleaned = Bag.create ()
 
 let () =
   (* I think we can rely on the at_shutdown handlers only firing in the current process
-     and not in the forks. In that case, worse things could happen than deleting the
+     and not in the forks.  In that case, worse things could happen than deleting the
      compiler under our feet. *)
   Shutdown.at_shutdown (fun () ->
     Deferred.List.iter (Bag.to_list created_but_not_cleaned) ~f:(fun compiler ->
       clean compiler >>| function
       | Ok ()   -> ()
-      | Error _ -> ()
-    )
-  )
-let shutting_down () =
+      | Error _ -> ()))
+;;
+
+let is_shutting_down () =
   match Shutdown.shutting_down () with
   | `No    -> false
   | `Yes _ -> true
 ;;
 
-exception Shutting_down [@@deriving sexp]
-;;
-
 let with_compiler
-    ?in_dir
-    ?in_dir_perm
-    ?include_directories
-    ?custom_warnings_spec
-    ?strict_sequence
-    ?cmx_flags
-    ?cmxs_flags
-    ?trigger_unused_value_warnings_despite_mli
-    ?use_cache
-    ?run_plugin_toplevel
-    ?code_style
-    ?persistent_archive_dirpath
-    ~f
-    ()
-    =
-  if shutting_down () then Deferred.Or_error.of_exn Shutting_down else begin
+      ?in_dir
+      ?in_dir_perm
+      ?include_directories
+      ?custom_warnings_spec
+      ?strict_sequence
+      ?cmx_flags
+      ?cmxs_flags
+      ?trigger_unused_value_warnings_despite_mli
+      ?use_cache
+      ?run_plugin_toplevel
+      ?code_style
+      ?persistent_archive_dirpath
+      ~f
+      ()
+  =
+  if is_shutting_down ()
+  then return (Or_error.error_s [%sexp "Shutting_down", [%here]])
+  else (
     create
       ?in_dir
       ?in_dir_perm
@@ -426,12 +442,12 @@ let with_compiler
       ?code_style
       ?persistent_archive_dirpath
       ()
-    >>=? function `this_needs_manual_cleaning_after compiler ->
-    if shutting_down ()
-    then
+    >>=? fun (`this_needs_manual_cleaning_after compiler) ->
+    if is_shutting_down ()
+    then (
       clean compiler >>=? fun () ->
-      Deferred.Or_error.of_exn Shutting_down
-    else begin
+      return (Or_error.error_s [%sexp "Shutting_down", [%here]]))
+    else (
       let bag_elem = Bag.add created_but_not_cleaned compiler in
       Deferred.Or_error.try_with_join ~extract_exn:true (fun () -> f compiler)
       >>= fun result ->
@@ -441,26 +457,24 @@ let with_compiler
       | Ok result, Ok ()          -> Ok result
       | Ok _, (Error _ as error)  -> error
       | Error e1, Error e2        -> Error (Error.of_list [e1; e2])
-      | Error _ as error, Ok ()   -> error
-    end
-  end
+      | Error _ as error, Ok ()   -> error))
 ;;
 
 let make_load_ocaml_src_files load_ocaml_src_files =
   let aux
-      ?in_dir
-      ?in_dir_perm
-      ?include_directories
-      ?custom_warnings_spec
-      ?strict_sequence
-      ?cmx_flags
-      ?cmxs_flags
-      ?trigger_unused_value_warnings_despite_mli
-      ?use_cache
-      ?run_plugin_toplevel
-      ?code_style
-      ?persistent_archive_dirpath
-      files =
+        ?in_dir
+        ?in_dir_perm
+        ?include_directories
+        ?custom_warnings_spec
+        ?strict_sequence
+        ?cmx_flags
+        ?cmxs_flags
+        ?trigger_unused_value_warnings_despite_mli
+        ?use_cache
+        ?run_plugin_toplevel
+        ?code_style
+        ?persistent_archive_dirpath
+        files =
     let f compiler =
       let loader = loader compiler in
       load_ocaml_src_files loader files

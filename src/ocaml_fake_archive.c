@@ -16,5 +16,5 @@ CAMLprim CAMLweakdef value ocaml_plugin_archive (value unit __attribute__ ((unus
 
 CAMLprim CAMLweakdef value ocaml_plugin_archive_metadata (value unit __attribute__ ((unused)))
 {
-  return(caml_copy_string("dummy"));
+  return(caml_copy_string(s));
 }

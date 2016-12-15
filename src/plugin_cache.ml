@@ -17,7 +17,7 @@ module Stable = struct
         ; max_files : int [@default 10]
         ; readonly  : bool [@default false]
         ; try_old_cache_with_new_exec : bool
-            [@default try_old_cache_with_new_exec_default]
+                                          [@default try_old_cache_with_new_exec_default]
         }
       [@@deriving fields, sexp, bin_io, compare]
       let t_of_sexp = Core.Std.Sexp.of_sexp_allow_extra_fields t_of_sexp
@@ -234,10 +234,10 @@ end = struct
     (* do no check for `Read there, let the reader fail in that case *)
     Unix.access pathname [ `Exists ] >>= function
     | Ok () -> begin
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
-        Reader.load_sexp_exn pathname t_of_sexp
-      )
-    end
+        Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+          Reader.load_sexp_exn pathname t_of_sexp
+        )
+      end
     | Error _ ->
       Deferred.return (Ok empty)
   ;;
@@ -248,8 +248,8 @@ module Config = struct
 
   module V = struct
     type t =
-    | V1 of Stable.V1.t
-    | V2 of Stable.V2.t
+      | V1 of Stable.V1.t
+      | V2 of Stable.V2.t
     [@@deriving sexp]
 
     let to_current = function
@@ -270,11 +270,11 @@ module Config = struct
   ;;
 
   let create
-      ~dir
-      ?(max_files=10)
-      ?(readonly=false)
-      ?(try_old_cache_with_new_exec=Stable.try_old_cache_with_new_exec_default)
-      () =
+        ~dir
+        ?(max_files=10)
+        ?(readonly=false)
+        ?(try_old_cache_with_new_exec=Stable.try_old_cache_with_new_exec_default)
+        () =
     { dir
     ; max_files
     ; readonly
@@ -307,9 +307,6 @@ module State = struct
     ; num_plugins_by_basenames     : Count_by_basenames.t
     ; num_plugins_by_filenames     : Count_by_filenames.t
     }
-
-  exception Read_only_info_file_exists_but_cannot_be_read_or_parsed of
-      string * Error.t [@@deriving sexp]
 
   let there_is_more_plugins_with_same what t p1 p2 =
     let num_plugins_with_same what t (p : Plugin_in_table.t) =
@@ -441,14 +438,16 @@ module State = struct
     in
     Info.load ~dir:config_dir >>= function
     | Error error ->
-      (* the info file exists but could not be read or could not be parsed *)
+      (* The info file exists but could not be read or could not be parsed. *)
       if Config.readonly t.config then
-        (* if the config is readonly, then we would rather make an error instead of
+        (* If the config is readonly, then we would rather make an error instead of
            working as if there was no cache, because applications could become slow all
            of a sudden, for reasons that could be hard to debug. *)
-        Deferred.Or_error.of_exn
-          (Read_only_info_file_exists_but_cannot_be_read_or_parsed
-             (Info.info_file_pathname ~dir:config_dir, error))
+        Or_error.error_s
+          [%sexp "Read_only_info_file_exists_but_cannot_be_read_or_parsed"
+               , (Info.info_file_pathname ~dir:config_dir : string)
+               , (error : Error.t) ]
+        |> return
       else
         (* If it is a permissions error, recreating the info file will fail and we will
            get a proper error. If it is a parsing error, we will just clean the possibly
@@ -515,7 +514,7 @@ module State = struct
     | None -> None
     | Some { plugin; _ } ->
       if Plugin.was_compiled_by_current_exec plugin
-         || Config.try_old_cache_with_new_exec t.config
+      || Config.try_old_cache_with_new_exec t.config
       then Some plugin
       else None
   ;;

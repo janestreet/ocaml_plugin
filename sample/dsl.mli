@@ -24,8 +24,6 @@ val univ_constr_v2 : (module Config_intf_v2) Ocaml_dynloader.Univ_constr.t
 val register_v1 : (module Config_intf_v1) -> unit
 val register_v2 : (module Config_intf_v2) -> unit
 
-(**
-   do something with the registered jobs
-*)
+(** Do something with the registered jobs. *)
 val exec : unit -> unit
 

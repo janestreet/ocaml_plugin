@@ -33,21 +33,23 @@ let post_process ~target lines : String.Set.t Or_error.t =
   )
 ;;
 
-let%test_module _ = (module struct
+let%test_module _ =
+  (module struct
 
-  let lines = [
-    "a.cmx : a.cmi c.cmx d.cmx e.cmx";
-    "a.cmo : a.cmi b.cmo c.cmo";
-    "a.cmi : f.cmi";
-  ]
-  ;;
+    let lines =
+      [ "a.cmx : a.cmi c.cmx d.cmx e.cmx"
+      ; "a.cmo : a.cmi b.cmo c.cmo"
+      ; "a.cmi : f.cmi"
+      ]
+    ;;
 
-  let expect = String.Set.of_list ["a"; "b"; "c"; "d"; "e"; "f"]
-  ;;
+    let expect = String.Set.of_list ["a"; "b"; "c"; "d"; "e"; "f"]
+    ;;
 
-  let%test_unit _ = [%test_eq: String.Set.t] (post_process ~target:"a" lines |> ok_exn) expect
-  ;;
-end)
+    let%test_unit _ =
+      [%test_eq: String.Set.t] (post_process ~target:"a" lines |> ok_exn) expect
+    ;;
+  end)
 
 let topological_sort ~visit_trace ~target ~find_direct_deps =
   (* this uses a Depth-First Search to find a topological order of compilation units and
@@ -60,7 +62,7 @@ let topological_sort ~visit_trace ~target ~find_direct_deps =
      each time we visit a node, we
      1) push it to [visiting] stack
      2) visit all its descendants which are not visited (i.e. not in [visiting] nor
-        [visit_finish_order])
+     [visit_finish_order])
      3) pop it from [visiting] stack and add it to [visit_finish_order]
   *)
   let visiting = Stack.create () in
@@ -97,63 +99,64 @@ let topological_sort ~visit_trace ~target ~find_direct_deps =
   Queue.to_list visit_finish_order
 ;;
 
-let%test_module _ = (module struct
+let%test_module _ =
+  (module struct
 
-  let test graph ~target =
-    let graph =
-      String.Map.of_alist_exn (List.rev_map graph ~f:(fun (a, deps) ->
-        a, String.Set.of_list deps))
-    in
-    let visited = String.Hash_set.create () in
-    let visit_trace s =
-      if Hash_set.mem visited s then
-        failwiths "complexity violation in toposort, node visited more that once"
-          (s, graph)
-          [%sexp_of: string * String.Set.t String.Map.t]
-      else
-        Hash_set.add visited s
-    in
-    Thread_safe.block_on_async_exn (fun () ->
-      topological_sort ~visit_trace ~target ~find_direct_deps:(fun ~target ->
-        return (Ok (Map.find_exn graph target))
+    let test graph ~target =
+      let graph =
+        String.Map.of_alist_exn (List.rev_map graph ~f:(fun (a, deps) ->
+          a, String.Set.of_list deps))
+      in
+      let visited = String.Hash_set.create () in
+      let visit_trace s =
+        if Hash_set.mem visited s then
+          failwiths "complexity violation in toposort, node visited more that once"
+            (s, graph)
+            [%sexp_of: string * String.Set.t String.Map.t]
+        else
+          Hash_set.add visited s
+      in
+      Thread_safe.block_on_async_exn (fun () ->
+        topological_sort ~visit_trace ~target ~find_direct_deps:(fun ~target ->
+          return (Ok (Map.find_exn graph target))
+        )
       )
-    )
-  ;;
+    ;;
 
-  let%test_unit _ =
-    let graph = [
-      "a", ["b"; "c"; "d"];
-      "b", ["c"];
-      "c", ["d"];
-      "d", ["e"];
-      "e", [];
-    ] in
-    [%test_eq: string list] (test graph ~target:"a" |> ok_exn) ["e"; "d"; "c"; "b"; "a"]
-  ;;
+    let%test_unit _ =
+      let graph = [
+        "a", ["b"; "c"; "d"];
+        "b", ["c"];
+        "c", ["d"];
+        "d", ["e"];
+        "e", [];
+      ] in
+      [%test_eq: string list] (test graph ~target:"a" |> ok_exn) ["e"; "d"; "c"; "b"; "a"]
+    ;;
 
-  let%test_unit _ =
-    let all =
-      List.init 26 ~f:(fun i ->
-        String.make 1 (Char.of_int_exn (Char.to_int 'a' + i)))
-    in
-    let graph =
-      let deps a = List.rev_filter all ~f:(String.(<) a) in
-      List.map all ~f:(fun a -> a, deps a)
-    in
-    [%test_eq: string list] (test graph ~target:"a" |> ok_exn) (List.rev all)
-  ;;
+    let%test_unit _ =
+      let all =
+        List.init 26 ~f:(fun i ->
+          String.make 1 (Char.of_int_exn (Char.to_int 'a' + i)))
+      in
+      let graph =
+        let deps a = List.rev_filter all ~f:(String.(<) a) in
+        List.map all ~f:(fun a -> a, deps a)
+      in
+      [%test_eq: string list] (test graph ~target:"a" |> ok_exn) (List.rev all)
+    ;;
 
-  let%test_unit _ =
-    let graph = [
-      "a", ["b"];
-      "b", ["c"];
-      "c", ["a"];
-    ] in
-    [%test_eq: Sexp.t]
-      (test graph ~target:"a" |> [%sexp_of: _ Or_error.t])
-      (Sexp.of_string "(Error (\"Circular dependency detected\" (a b c)))")
-  ;;
-end)
+    let%test_unit _ =
+      let graph = [
+        "a", ["b"];
+        "b", ["c"];
+        "c", ["a"];
+      ] in
+      [%test_eq: Sexp.t]
+        (test graph ~target:"a" |> [%sexp_of: _ Or_error.t])
+        (Sexp.of_string "(Error (\"Circular dependency detected\" (a b c)))")
+    ;;
+  end)
 
 let find_dependencies ~prog ~args ~working_dir ~target =
   let args = "-one-line" :: args in

@@ -1,7 +1,3 @@
-(* [t] is a uniq identifier for plugin, along with some information needed for code
-   generation and that make debugging nicer because they end up in the cache info.
-*)
-
 open! Core.Std
 
 module Repr : sig
@@ -11,6 +7,8 @@ module Repr : sig
   val univ_constr : t -> string
 end
 
+(** [t] is a unique identifier for plugin, along with some information needed for code
+    generation and that make debugging nicer because they end up in the cache info. *)
 type t [@@deriving sexp]
 
 val uuid : t -> Uuid.t
