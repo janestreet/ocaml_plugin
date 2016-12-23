@@ -569,6 +569,10 @@ module type S = sig
     string list -> t Deferred.Or_error.t
   ) create_arguments
 
+  val load_ocaml_src_files_without_running_them : (
+    string list -> (unit -> t) Deferred.Or_error.t
+  ) create_arguments
+
   val check_ocaml_src_files : (
     string list -> unit Deferred.Or_error.t
   ) create_arguments
@@ -584,6 +588,8 @@ end
 module Make (X:Ocaml_dynloader.Module_type) = struct
   module Load = Ocaml_dynloader.Make(X)
   let load_ocaml_src_files  = make_load_ocaml_src_files Load.load_ocaml_src_files
+  let load_ocaml_src_files_without_running_them =
+    make_load_ocaml_src_files Load.load_ocaml_src_files_without_running_them
   let check_ocaml_src_files = make_load_ocaml_src_files Load.check_ocaml_src_files
   ;;
 
@@ -597,6 +603,8 @@ end
 module Side_effect = struct
   module Load = Ocaml_dynloader.Side_effect
   let load_ocaml_src_files = make_load_ocaml_src_files Load.load_ocaml_src_files
+  let load_ocaml_src_files_without_running_them =
+    make_load_ocaml_src_files Load.load_ocaml_src_files_without_running_them
   let check_ocaml_src_files = make_load_ocaml_src_files Load.check_ocaml_src_files
   ;;
 

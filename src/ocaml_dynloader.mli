@@ -228,6 +228,13 @@ module type S = sig
   val load_ocaml_src_files :
     dynloader -> string list -> t Deferred.Or_error.t
 
+  (** Loads the given source files, same as [load_ocaml_src_files], but instead of running
+      their toplevel, you are given a closure that will run the toplevel. You can use this
+      to run the toplevel multiple times, or lazily, or outside the async thread, or get
+      precise control over the raised exceptions. *)
+  val load_ocaml_src_files_without_running_them :
+    dynloader -> string list -> (unit -> t) Deferred.Or_error.t
+
   (** Similar to [load_ocaml_src_files], but does not execute the plugin toplevel, just
       checks that compilation and dynamic linking work. *)
   val check_ocaml_src_files :

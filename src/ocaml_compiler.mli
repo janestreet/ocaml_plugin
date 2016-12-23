@@ -133,6 +133,10 @@ module type S = sig
     string list -> t Deferred.Or_error.t
   ) create_arguments
 
+  val load_ocaml_src_files_without_running_them : (
+    string list -> (unit -> t) Deferred.Or_error.t
+  ) create_arguments
+
   val check_ocaml_src_files : (
     string list -> unit Deferred.Or_error.t
   ) create_arguments

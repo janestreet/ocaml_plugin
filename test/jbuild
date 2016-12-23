@@ -25,21 +25,24 @@
   (deps (plugin_loader.exe
          test_with_sexp.ml
          test_with_sexp.mli))
-  (action "./plugin_loader.exe test_with_sexp.mli")))
+  (action "./plugin_loader.exe test_with_sexp.mli")
+  (sandbox ignore_targets)))
 
 (alias
  ((name runtest)
   (deps (plugin_loader.exe
          test_with_sexp.ml
          test_with_sexp.mli))
-  (action "./plugin_loader.exe test_with_sexp.ml")))
+  (action "./plugin_loader.exe test_with_sexp.ml")
+  (sandbox ignore_targets)))
 
 (alias
  ((name runtest)
   (deps (plugin_loader.exe
          test_with_sexp_ppx_style.ml
          test_with_sexp_ppx_style.mli))
-  (action "./plugin_loader.exe --ppx test_with_sexp_ppx_style.ml")))
+  (action "./plugin_loader.exe --ppx test_with_sexp_ppx_style.ml")
+  (sandbox ignore_targets)))
 
 (alias
  ((name runtest)
@@ -48,7 +51,8 @@
          test_with_sexp.mli
          test_with_sexp_dep.ml
          test_with_sexp_dep.mli))
-  (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")))
+  (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")
+  (sandbox ignore_targets)))
 
 (alias
  ((name runtest)
@@ -57,7 +61,8 @@
          test_with_sexp_ppx_style.mli
          test_with_sexp_dep_ppx_style.ml
          test_with_sexp_dep_ppx_style.mli))
-  (action "./plugin_loader.exe --find-dependencies --ppx test_with_sexp_dep_ppx_style.ml")))
+  (action "./plugin_loader.exe --find-dependencies --ppx test_with_sexp_dep_ppx_style.ml")
+  (sandbox ignore_targets)))
 
 (unified_tests
  ((deps (plugin_loader.exe))

@@ -665,6 +665,8 @@ module type S = sig
   type t
   val load_ocaml_src_files :
     dynloader -> string list -> t Deferred.Or_error.t
+  val load_ocaml_src_files_without_running_them :
+    dynloader -> string list -> (unit -> t) Deferred.Or_error.t
   val check_ocaml_src_files :
     dynloader -> string list -> unit Deferred.Or_error.t
   module Expert : sig
@@ -707,6 +709,11 @@ struct
       | Ok Type_equal.T -> Ok (cmxs_filename, (make_plugin : unit -> X.t)))
   ;;
 
+  let load_ocaml_src_files_without_running_them t filenames =
+    load_and_type_ocaml_src_files_without_running_them t filenames
+    >>|? fun (`cmxs_filename _, make_plugin) ->
+    make_plugin
+
   let run make_plugin =
     try Ok (make_plugin ())
     with exn ->
@@ -723,9 +730,8 @@ struct
   ;;
 
   let check_ocaml_src_files t filenames =
-    load_and_type_ocaml_src_files_without_running_them t filenames
-    >>|? fun (`cmxs_filename (_ : string), (_ : unit -> X.t)) ->
-    ()
+    load_ocaml_src_files_without_running_them t filenames
+    >>|? fun (_ : unit -> X.t) -> ()
   ;;
 
   module Expert = struct
@@ -782,10 +788,18 @@ module Side_effect_loader = Make(struct
 module Side_effect = struct
   open Side_effect_loader
   let check_ocaml_src_files = check_ocaml_src_files
+
   let load_ocaml_src_files t filenames =
     load_ocaml_src_files t filenames
     >>|? fun (_ : (module Side_effect)) -> ()
   ;;
+
+  let load_ocaml_src_files_without_running_them t filenames =
+    load_ocaml_src_files_without_running_them t filenames
+    >>|? fun f ->
+    (fun () -> ignore (f () : (module Side_effect)))
+  ;;
+
   module Expert = struct
     let compile_ocaml_src_files_into_cmxs_file =
       Expert.compile_ocaml_src_files_into_cmxs_file
