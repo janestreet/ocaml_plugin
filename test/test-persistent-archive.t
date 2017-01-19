@@ -25,5 +25,5 @@ Checking that archive is really persistent
 Check that if the extracted archived is corrupted (missing ppx.exe here), we recover:
 
   $ rm cache/compiler/*.exe
-  $ $TEST_DIR/plugin_loader.exe --persistent-archive --ppx test1.ml
+  $ $TEST_DIR/plugin_loader.exe --persistent-archive test1.ml
   persistent

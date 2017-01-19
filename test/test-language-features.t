@@ -36,7 +36,7 @@ Objects
 Generative functors
 
   $ cat > test.ml <<EOF
-  > module F() = struct type _t print_endline "ok" end
+  > module F() = struct type _t let () = print_endline "ok" end
   > include F()
   > EOF
   $ $TEST_DIR/plugin_loader.exe ./test.ml

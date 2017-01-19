@@ -6,8 +6,7 @@
     fieldslib
     sexplib))
   (cmis (plugin_intf))
-  (pps (ppx_jane))
-  (code_style ppx)))
+  (pps (ppx_jane))))
 
 (executables
  ((names (run))

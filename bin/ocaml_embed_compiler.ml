@@ -7,11 +7,11 @@ let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
 ;;
 
 let readme () = "\
-This tool archives ocamlopt, cmis, camlp4 and preprocessors in a c file containing a big
-static string. The resulting .o file should be linked with any executable that uses
-Ocaml_plugin.Ocaml_compiler module. Or you can link your executable with a .o file
-containing a dummy definition of the function ocaml_plugin_archive if you know you will
-not need it."
+This tool archives ocamlopt, cmis and preprocessors in a c file containing a big static
+ string. The resulting .o file should be linked with any executable that uses
+ Ocaml_plugin.Ocaml_compiler module. Or you can link your executable with a .o file
+ containing a dummy definition of the function ocaml_plugin_archive if you know you will
+ not need it."
 ;;
 
 let check_files_in_tar ~files_in_tar ~expected =
@@ -107,10 +107,6 @@ let command =
       +> flag "-cc" (required file)
            ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
 
-      ++ step (fun k camlp4o_opt -> k ~camlp4o_opt)
-      +> flag "-pp" (optional file)
-           ~doc:"</path/to/camlp4o.opt> set the camlp4o native pre-processor"
-
       ++ step (fun k ppx_exe -> k ~ppx_exe)
       +> flag "-ppx" (optional file)
            ~doc:"</path/to/ppx.exe> set the executable for ppx preprocessing"
@@ -118,10 +114,6 @@ let command =
       ++ step (fun k ocamldep_opt -> k ~ocamldep_opt)
       +> flag "-ocamldep" (optional file)
            ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
-
-      ++ step (fun k pa_files -> k ~pa_files)
-      +> flag "-pa-cmxs" (listed file)
-           ~doc:"<file.cmxs> path to a native syntax extension plugin file"
 
       ++ step (fun k target -> k ~target)
       +> flag "-o" (required file)
@@ -135,10 +127,8 @@ let command =
     )
     (fun
       ~ocamlopt_opt
-      ~camlp4o_opt
       ~ppx_exe
       ~ocamldep_opt
-      ~pa_files
       ~target
       ~verbose
       ~extra_files
@@ -176,16 +166,6 @@ let command =
       | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_compiler.ppx_exe
       | None -> return ()
       end >>= fun () ->
-      begin match camlp4o_opt with
-      | None ->
-        begin match pa_files with
-        | [] -> return ()
-        | _ :: _ -> failwith "camlp4 extension files given (with -pa-cmxs), but -pp is absent"
-        end
-      | Some camlp4o_opt -> cp ~filename:camlp4o_opt ~basename:Ocaml_compiler.camlp4o_opt
-      end >>= fun () ->
-      Deferred.List.map ~how pa_files ~f:copy_file
-      >>= fun pa_files ->
       let tar = "a.tgz" in
       Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files:(Hashtbl.keys embedded_files) tar
       >>=! fun () ->
@@ -196,8 +176,7 @@ let command =
       let tar = tmpdir ^/ tar in
       generate_c_file target ~tar
         ~metadata:
-          { camlp4_is_embedded = Option.map camlp4o_opt ~f:(fun _ -> `pa_files pa_files)
-          ; ppx_is_embedded = Option.is_some ppx_exe
+          { ppx_is_embedded = Option.is_some ppx_exe
           ; archive_digests = String.Map.of_alist_exn digests_by_basename
           }
       >>= function

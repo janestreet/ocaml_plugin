@@ -1,6 +1,5 @@
 (embed
  ((names (plugin_loader))
-  (code_style bilingual)
   (libraries
    (async
     core
@@ -39,29 +38,11 @@
 (alias
  ((name runtest)
   (deps (plugin_loader.exe
-         test_with_sexp_ppx_style.ml
-         test_with_sexp_ppx_style.mli))
-  (action "./plugin_loader.exe --ppx test_with_sexp_ppx_style.ml")
-  (sandbox ignore_targets)))
-
-(alias
- ((name runtest)
-  (deps (plugin_loader.exe
          test_with_sexp.ml
          test_with_sexp.mli
          test_with_sexp_dep.ml
          test_with_sexp_dep.mli))
   (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")
-  (sandbox ignore_targets)))
-
-(alias
- ((name runtest)
-  (deps (plugin_loader.exe
-         test_with_sexp_ppx_style.ml
-         test_with_sexp_ppx_style.mli
-         test_with_sexp_dep_ppx_style.ml
-         test_with_sexp_dep_ppx_style.mli))
-  (action "./plugin_loader.exe --find-dependencies --ppx test_with_sexp_dep_ppx_style.ml")
   (sandbox ignore_targets)))
 
 (unified_tests

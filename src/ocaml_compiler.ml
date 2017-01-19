@@ -7,7 +7,6 @@ let tar_id = "dynlink.tgz"
 
 let ocamlopt_opt = "ocamlopt.opt"
 let ocamldep_opt = "ocamldep.opt"
-let camlp4o_opt  = "camlp4o.opt"
 let ppx_exe      = "ppx.exe"
 ;;
 
@@ -21,8 +20,7 @@ module Archive_metadata = struct
      archive_digests to differ), so whether or not we can read old versions of the type,
      we'll re-extract the archive. *)
   type t =
-    { camlp4_is_embedded : [`pa_files of string list] option
-    ; ppx_is_embedded    : bool
+    { ppx_is_embedded    : bool
     ; archive_digests    : Plugin_cache.Digest.t String.Map.t
     }
   [@@deriving sexp]
@@ -131,39 +129,8 @@ let save_archive_to destination =
       Deferred.unit))
 ;;
 
-module Code_style = struct
-  type t =
-    [ `No_preprocessing
-    | `Camlp4_style
-    | `Ppx_style
-    ]
-  [@@deriving sexp_of]
-
-  let of_string_alist =
-    [ "camlp4"           , `Camlp4_style
-    ; "ppx"              , `Ppx_style
-    ; "no-preprocessing" , `No_preprocessing
-    ]
-  ;;
-
-  let doc =
-    sprintf "(%s)"
-      (of_string_alist
-       |> List.map ~f:fst
-       |> String.concat ~sep:"|")
-  ;;
-
-  let arg_type = Command.Arg_type.of_alist_exn of_string_alist
-  let optional_param =
-    Command.Spec.(
-      flag "-code-style" (optional arg_type)
-        ~doc:(sprintf "%s Specify plugin code style" doc))
-  ;;
-end
-
 type 'a create_arguments = (
-  ?code_style:Code_style.t
-  -> ?persistent_archive_dirpath:string
+  ?persistent_archive_dirpath:string
   -> 'a
 ) Ocaml_dynloader.create_arguments
 
@@ -293,7 +260,6 @@ let create
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
-      ?code_style
       ?persistent_archive_dirpath
       () =
   let archive_lock = ref Archive_lock.Cleaned in
@@ -317,41 +283,12 @@ let create
   let cmx_flags = nostdlib cmx_flags in
   let cmxs_flags = nostdlib cmxs_flags in
   let preprocessor =
-    let no_preprocessing = Ocaml_dynloader.Preprocessor.No_preprocessing in
-    let camlp4 pa_files =
-      Ocaml_dynloader.Preprocessor.Camlp4
-        { camlp4o_opt = in_compiler_dir camlp4o_opt
-        ; pa_files
-        }
-    in
-    let ppx =
-      Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe }
-    in
     match force archive_metadata with
     | Error _ as error -> error
-    | Ok archive_metadata ->
-      match code_style, archive_metadata with
-      | None, { camlp4_is_embedded; ppx_is_embedded; archive_digests = _ } ->
-        if ppx_is_embedded
-        then Ok ppx
-        else
-          begin match camlp4_is_embedded with
-          | Some (`pa_files pa_files) -> Ok (camlp4 pa_files)
-          | None -> Ok no_preprocessing
-          end
-
-      | Some `No_preprocessing, _ -> Ok no_preprocessing
-
-      | Some `Camlp4_style, {camlp4_is_embedded = None; _ } ->
-        Or_error.error_string "There is no embedded camlp4o_opt in the current executable"
-
-      | Some `Camlp4_style, {camlp4_is_embedded = Some (`pa_files pa_files); _ } ->
-        Ok (camlp4 pa_files)
-
-      | Some `Ppx_style, {ppx_is_embedded = false; _} ->
-        Or_error.error_string "There is no embedded ppx_exe in the current executable"
-
-      | Some `Ppx_style, {ppx_is_embedded = true; _} -> Ok ppx
+    | Ok { ppx_is_embedded; archive_digests = _ } ->
+      if ppx_is_embedded
+      then Ok (Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe })
+      else Ok Ocaml_dynloader.Preprocessor.No_preprocessing
   in
   return preprocessor
   >>=? fun preprocessor ->
@@ -420,7 +357,6 @@ let with_compiler
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
-      ?code_style
       ?persistent_archive_dirpath
       ~f
       ()
@@ -439,7 +375,6 @@ let with_compiler
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
-      ?code_style
       ?persistent_archive_dirpath
       ()
     >>=? fun (`this_needs_manual_cleaning_after compiler) ->
@@ -472,7 +407,6 @@ let make_load_ocaml_src_files load_ocaml_src_files =
         ?trigger_unused_value_warnings_despite_mli
         ?use_cache
         ?run_plugin_toplevel
-        ?code_style
         ?persistent_archive_dirpath
         files =
     let f compiler =
@@ -490,7 +424,6 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
       ?run_plugin_toplevel
-      ?code_style
       ?persistent_archive_dirpath
       ~f
       ()
@@ -500,8 +433,7 @@ let make_load_ocaml_src_files load_ocaml_src_files =
 
 let make_check_plugin_cmd
       ~check_ocaml_src_files
-      ~load_ocaml_src_files
-      ~with_code_style_switch () =
+      ~load_ocaml_src_files () =
   let execute_plugin_toplevel_switch = "-execute-plugin-toplevel" in
   let arg_spec =
     Command.Spec.(
@@ -513,13 +445,9 @@ let make_check_plugin_cmd
            ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
       +> flag "-verbose" no_arg
            ~doc:" Be more verbose"
-      +>
-      if with_code_style_switch
-      then Code_style.optional_param
-      else return None
     )
   in
-  let main plugin_filenames execute_plugin_toplevel use_ocamldep is_verbose code_style
+  let main plugin_filenames execute_plugin_toplevel use_ocamldep is_verbose
         () =
     let f compiler =
       let loader = loader compiler in
@@ -542,7 +470,7 @@ let make_check_plugin_cmd
       else
         check_ocaml_src_files loader plugin_filenames
     in
-    with_compiler ?code_style ~f ()
+    with_compiler ~f ()
     >>| function
     | Ok () ->
       if is_verbose then Print.printf "ok\n%!";
@@ -577,10 +505,7 @@ module type S = sig
     string list -> unit Deferred.Or_error.t
   ) create_arguments
 
-  val check_plugin_cmd :
-    with_code_style_switch:bool
-    -> unit
-    -> Command.t
+  val check_plugin_cmd : unit -> Command.t
 
   module Load : Ocaml_dynloader.S with type t := t
 end

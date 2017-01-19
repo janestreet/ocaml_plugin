@@ -84,16 +84,6 @@ type 'a create_arguments =
 
   -> 'a
 
-module Camlp4 : sig
-  (** [pa_files] is a list of syntax extension files, typically [cmxs] files that are
-      required to compile the plugins.  They should have been built consistently with
-      [camlp4o_opt] which will attempty to dynlink them. *)
-  type t =
-    { camlp4o_opt : string
-    ; pa_files    : string list
-    }
-end
-
 module Ppx : sig
   (** [ppx_exe] is a custom ppx binary built to include all the syntax extensions required
       to compile the plugins. *)
@@ -105,7 +95,6 @@ end
 module Preprocessor : sig
   type t =
     | No_preprocessing
-    | Camlp4 of Camlp4.t
     | Ppx    of Ppx.t
 end
 

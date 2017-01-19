@@ -19,13 +19,6 @@ let default_warnings_spec = warnings_spec ~disabled_warnings:default_disabled_wa
 let index = ref 0
 ;;
 
-module Camlp4 = struct
-  type t =
-    { camlp4o_opt : string
-    ; pa_files    : string list
-    }
-end
-
 module Ppx = struct
   type t =
     { ppx_exe : string
@@ -35,7 +28,6 @@ end
 module Preprocessor = struct
   type t =
     | No_preprocessing
-    | Camlp4 of Camlp4.t
     | Ppx    of Ppx.t
 end
 
@@ -311,18 +303,13 @@ let include_directories dirs =
   List.concat_map dirs ~f:(fun dir -> [ "-I" ; dir ])
 ;;
 
-let make_pp_args ?(map_exe=Fn.id) ~include_directories:dirs preprocessor =
+let make_pp_args ?(map_exe=Fn.id) preprocessor =
   let call prog args =
     String.concat ~sep:" " (List.map ~f:Filename.quote (map_exe prog :: args))
   in
   match (preprocessor : Preprocessor.t) with
   | No_preprocessing -> []
   | Ppx    { ppx_exe } -> [ "-pp"; call ppx_exe ["-dump-ast"] ]
-  | Camlp4 { camlp4o_opt; pa_files } ->
-    match pa_files with
-    | [] -> []
-    | cmxs ->
-      [ "-pp"; call camlp4o_opt (include_directories dirs @ cmxs) ]
 ;;
 
 module Compile : sig
@@ -499,11 +486,7 @@ end = struct
     let ml   = ext "ml" in
     let cmx  = ext "cmx" in
     let cmxs = ext "cmxs" in
-    let pp_args =
-      make_pp_args
-        ~include_directories:t.include_directories
-        t.compilation_config.preprocessor
-    in
+    let pp_args = make_pp_args t.compilation_config.preprocessor in
     let create_cmx_args =
       pp_args @ include_directories t.include_directories @ t.cmx_flags @ [
         "-c";
@@ -572,12 +555,7 @@ let find_dependencies t filename =
       then base_dir ^/ file
       else file
     in
-    let pp_args =
-      make_pp_args
-        ~map_exe:in_base_dir
-        ~include_directories:(base_dir :: t.include_directories)
-        t.compilation_config.preprocessor
-    in
+    let pp_args = make_pp_args ~map_exe:in_base_dir t.compilation_config.preprocessor in
     (* we create a new directory under [base_dir] as ocamldep's working directory, when
        we copy files, we strip the shebang line. *)
     Shell.temp_dir ~in_dir:base_dir ~prefix:"ocamldep" ~suffix:"" ()
