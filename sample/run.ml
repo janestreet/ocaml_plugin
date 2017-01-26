@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Async.Std
 open Ocaml_plugin.Std
 
@@ -16,7 +16,7 @@ let ocamlopt_opt = "ocamlopt.opt"
    In production, this directory would be somewhere hidden in /tmp
    and cleaned right after the end of the dynloading.
 *)
-let builddir = Filename.concat (Core.Std.Sys.getcwd()) "_build"
+let builddir = Filename.concat (Core.Sys.getcwd()) "_build"
 
 (*
    For building this example, we use 3 config files
@@ -224,7 +224,7 @@ let summary = "simple example to test the ocaml_plugin library"
 let handle_error load = function
   | Result.Ok m -> load m
   | Result.Error e ->
-    Core.Std.Printf.eprintf "Error:\n%s\n%!" (Error.to_string_hum e)
+    Core.Printf.eprintf "Error:\n%s\n%!" (Error.to_string_hum e)
 ;;
 
 let load_file loader = function
@@ -272,7 +272,7 @@ let main () () =
       in
       build >>= function
       | Error e ->
-        Core.Std.Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
+        Core.Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
         exit 1
       | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
         return

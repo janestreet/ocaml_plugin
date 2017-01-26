@@ -6,7 +6,7 @@ Loading several ml files with ocamldep in a read-only folder
   $ mkdir -p readonly
   $ echo 'let () = print_endline "this should not be loaded"' > readonly/test.ml
   $ echo 'let () "this syntax error shall not be a problem"' > readonly/test_with_typo.ml
-  $ echo 'open Core.Std;; let x = Test2.x ^ (sprintf !"%{sexp: string}" "-middle")' > readonly/test1.ml
+  $ echo 'open Core;; let x = Test2.x ^ (sprintf !"%{sexp: string}" "-middle")' > readonly/test1.ml
   $ echo 'let x = "first"' > readonly/test2.ml
   $ echo '#!/usr/bin/env ocaml' > readonly/test3.ml
   $ echo 'let x = Test1.x ^ "-last";; print_endline x' >> readonly/test3.ml

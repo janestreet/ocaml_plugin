@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Async.Std
 
 let permission_exe = 0o700
@@ -52,7 +52,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
     lazy (prog::args |> [%sexp_of: string list] |> Sexp.to_string)
   in
   if !echo then
-    Core.Std.Printf.printf "Shell: %s\n%!" (force command_text);
+    Core.Printf.printf "Shell: %s\n%!" (force command_text);
 
   Process.create ?working_dir ~prog ~args () >>=? fun process ->
   Process.collect_output_and_wait process >>| fun output ->
@@ -67,7 +67,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
       else Ok ()
   in
   if !verbose then (
-    Core.Std.Printf.printf "%s%s%!" (endline stdout) (endline stderr);
+    Core.Printf.printf "%s%s%!" (endline stdout) (endline stderr);
   );
   match error_and_status with
   | Ok () ->
@@ -84,7 +84,7 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
       let status =
         match status with
         | Some status -> Sexp.to_string
-                           ([%sexp_of: Core.Std.Unix.Exit_or_signal.error] status)
+                           ([%sexp_of: Core.Unix.Exit_or_signal.error] status)
         | None -> "error trace on stdout or stderr"
       in
       sprintf "working_dir: %s\nstatus: %s\ncommand: %s\n%s%s"

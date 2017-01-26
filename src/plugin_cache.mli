@@ -7,7 +7,7 @@
     contains the version of the executable using the cache.  If the version doesn't match,
     the cache is deleted (or just skipped if no write access). *)
 
-open! Core.Std
+open! Core
 open! Async.Std
 
 (** Mutable type containing information about the cached files. *)

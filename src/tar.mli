@@ -1,4 +1,4 @@
-open! Core.Std
+open! Core
 open! Async.Std
 
 val create : working_dir:string -> files:string list -> string -> unit Deferred.Or_error.t

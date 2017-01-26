@@ -1,4 +1,4 @@
-open! Core.Std
+open! Core
 open! Async.Std
 
 (** Call [ocamldep] to recursively find dependencies for the [target] compilation unit,

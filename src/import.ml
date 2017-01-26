@@ -1,4 +1,4 @@
-open! Core.Std
+open! Core
 open Async.Std
 
 (* some shared internal util for ocaml_plugin *)

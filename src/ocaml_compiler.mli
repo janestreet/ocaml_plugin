@@ -5,7 +5,7 @@
 
     This is meant to be used in unix only, in particular because it uses /proc to
     determine the location of the exec code being run. *)
-open! Core.Std
+open! Core
 open! Async.Std
 
 (**

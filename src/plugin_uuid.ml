@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 
 module Repr = struct
   type t =

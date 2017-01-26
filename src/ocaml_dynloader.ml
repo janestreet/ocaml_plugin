@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Async.Std
 
 let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58]
@@ -332,7 +332,7 @@ module Compile : sig
     :  t
     -> ?export:bool
     -> compilation_directory:Compilation_directory.t
-    -> basename:Core.Std.String.Hash_set.elt
+    -> basename:Core.String.Hash_set.elt
     -> (string * packed_plugin) Async.Std.Deferred.Or_error.t
 
 end = struct
@@ -375,28 +375,28 @@ end = struct
         let output_struct ~sig_name_opt =
           begin match sig_name_opt with
           | None ->
-            Core.Std.Printf.fprintf out_channel "module %s = struct\n" module_name
+            Core.Printf.fprintf out_channel "module %s = struct\n" module_name
           | Some sig_name ->
-            Core.Std.Printf.fprintf out_channel "module %s : %s = struct\n" module_name sig_name
+            Core.Printf.fprintf out_channel "module %s : %s = struct\n" module_name sig_name
           end;
-          Core.Std.Printf.fprintf out_channel "#1 %S\n" filename;
+          Core.Printf.fprintf out_channel "#1 %S\n" filename;
           In_channel.with_file filename
             ~binary:false
             ~f:(output_in_channel out_channel);
-          Core.Std.Printf.fprintf out_channel "\nend\n";
+          Core.Printf.fprintf out_channel "\nend\n";
         in
         match intf_filename_opt with
         | None -> output_struct ~sig_name_opt:None
         | Some intf_filename ->
           let sig_name = ocaml_plugin_gen_sig_prefix ^ module_name in
-          Core.Std.Printf.fprintf out_channel "module type %s = sig\n" sig_name;
-          Core.Std.Printf.fprintf out_channel "#1 %S\n" intf_filename;
+          Core.Printf.fprintf out_channel "module type %s = sig\n" sig_name;
+          Core.Printf.fprintf out_channel "#1 %S\n" intf_filename;
           In_channel.with_file ~binary:false intf_filename
             ~f:(output_in_channel out_channel);
-          Core.Std.Printf.fprintf out_channel "\nend\n";
+          Core.Printf.fprintf out_channel "\nend\n";
           output_struct ~sig_name_opt:(Some sig_name);
           if not trigger_unused_value_warnings_despite_mli then begin
-            Core.Std.Printf.fprintf out_channel "let _avoid_warnings = (module %s : %s)\n"
+            Core.Printf.fprintf out_channel "let _avoid_warnings = (module %s : %s)\n"
               module_name sig_name;
           end;
       in
@@ -410,7 +410,7 @@ end = struct
           | Some last -> last
         in
         let main_module_name = Ml_bundle.module_name last_bundle in
-        Core.Std.Printf.fprintf out_channel (
+        Core.Printf.fprintf out_channel (
           "module F () : sig\n"   ^^
           "  module %s : %s\n"               ^^
           "end\n = struct\n"
@@ -419,8 +419,8 @@ end = struct
           (Plugin_uuid.Repr.t repr)
         ;
         List.iter bundles ~f:(with_bundle out_channel);
-        Core.Std.Printf.fprintf out_channel "end\n";
-        Core.Std.Printf.fprintf out_channel (
+        Core.Printf.fprintf out_channel "end\n";
+        Core.Printf.fprintf out_channel (
           "let () =\n" ^^
           "  let module R = Ocaml_plugin.Ocaml_dynloader in\n" ^^
           "  R.return_plugin %s (fun () ->\n" ^^

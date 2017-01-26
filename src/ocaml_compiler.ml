@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Async.Std
 open Import
 
@@ -103,19 +103,19 @@ involving [ocaml_embed_compiler]."
 ;;
 
 let () =
-  match Core.Std.Sys.getenv "OCAML_PLUGIN_DUMP_ARCHIVE" with
+  match Core.Sys.getenv "OCAML_PLUGIN_DUMP_ARCHIVE" with
   | None -> ()
   | Some _ ->
     (* This is a way of extracting the archive from the executable. It can be used like
        this: OCAML_PLUGIN_DUMP_ARCHIVE= ./run.exe | tar -xz
        We exit to avoid running any side effects that could be done later at toplevel. *)
     (match force archive_metadata with
-     | Error _ -> Core.Std.Printf.eprintf "No archive metadata\n%!"
+     | Error _ -> Core.Printf.eprintf "No archive metadata\n%!"
      | Ok archive_metadata ->
-       Core.Std.Printf.eprintf !"archive metadata: %{sexp:Archive_metadata.t}\n%!"
+       Core.Printf.eprintf !"archive metadata: %{sexp:Archive_metadata.t}\n%!"
          archive_metadata);
     (match archive () with
-     | None -> Core.Std.Printf.printf "No archive\n%!"
+     | None -> Core.Printf.printf "No archive\n%!"
      | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout);
     Core.Caml.Pervasives.exit 0
 ;;

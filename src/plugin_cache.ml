@@ -1,5 +1,5 @@
 module Stable = struct
-  open Core.Stable
+  open Core.Core_stable
 
   module Config = struct
     let try_old_cache_with_new_exec_default = false
@@ -20,10 +20,10 @@ module Stable = struct
                                           [@default try_old_cache_with_new_exec_default]
         }
       [@@deriving fields, sexp, bin_io, compare]
-      let t_of_sexp = Core.Std.Sexp.of_sexp_allow_extra_fields t_of_sexp
+      let t_of_sexp = Core.Sexp.of_sexp_allow_extra_fields t_of_sexp
       let of_prev (v1 : V1.t) =
         { dir = v1.dir
-        ; max_files = Core.Std.Option.value v1.max_files ~default:10
+        ; max_files = Core.Option.value v1.max_files ~default:10
         ; readonly = v1.readonly
         ; try_old_cache_with_new_exec = try_old_cache_with_new_exec_default
         }
@@ -32,7 +32,7 @@ module Stable = struct
   end
 end
 
-open Core.Std
+open Core
 open Async.Std
 open Import
 

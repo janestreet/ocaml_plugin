@@ -1,4 +1,4 @@
-open! Core.Std
+open! Core
 
 (** This file is replaced by an alternative file in the release version, since
     [Version_util] is not released and therefore not available. *)

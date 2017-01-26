@@ -1,4 +1,4 @@
-open! Core.Std
+open! Core
 
 (* example of plugin of type Plugin_intf.S *)
 

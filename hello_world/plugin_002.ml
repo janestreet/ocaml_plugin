@@ -1,3 +1,3 @@
-open! Core.Std
+open! Core
 
 let message = 42

@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Ocaml_plugin.Std
 
 type t1 = string

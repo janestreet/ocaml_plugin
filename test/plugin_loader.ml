@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Async.Std
 open Ocaml_plugin.Std
 
@@ -26,7 +26,7 @@ let run
            begin match Sys.getenv "VERBOSE" with
            | None -> ()
            | Some _ ->
-             Core.Std.Printf.printf "Loaded %s\n"
+             Core.Printf.printf "Loaded %s\n"
                (String.concat (List.map files ~f:Filename.basename) ~sep:" ")
            end;
            Ocaml_dynloader.Side_effect.load_ocaml_src_files loader files

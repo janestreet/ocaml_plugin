@@ -7,4 +7,4 @@
      let version = "NO_VERSION_UTIL"
    ]}
 *)
-include Core.Std.Version_util
+include Core.Version_util
