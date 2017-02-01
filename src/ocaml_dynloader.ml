@@ -149,7 +149,6 @@ type t =
   ; ocamlopt_opt          : string
   ; ocamldep_opt          : string
   ; cache                 : Plugin_cache.t Or_error.t Lazy_deferred.t option
-  ; run_plugin_toplevel   : [ `In_async_thread | `Outside_of_async ]
   }
 [@@deriving fields]
 
@@ -171,10 +170,7 @@ type 'a create_arguments =
   -> ?cmxs_flags:string list
   -> ?trigger_unused_value_warnings_despite_mli:bool
   -> ?use_cache:Plugin_cache.Config.t
-  -> ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
   -> 'a
-
-let default_run_plugin_toplevel = `In_async_thread
 
 let create
       ?(in_dir = Filename.temp_dir_name)
@@ -186,7 +182,6 @@ let create
       ?(cmxs_flags = [])
       ?(trigger_unused_value_warnings_despite_mli = false)
       ?use_cache
-      ?(run_plugin_toplevel = default_run_plugin_toplevel)
       ?(initialize = fun ~directory:_ -> return (Ok ()))
       ?(compilation_config = Compilation_config.default)
       ?(ocamlopt_opt = Default_binaries.ocamlopt_opt)
@@ -225,7 +220,6 @@ let create
       ; ocamlopt_opt
       ; ocamldep_opt
       ; cache
-      ; run_plugin_toplevel
       } in
     Deferred.return (Ok t))
 ;;
@@ -654,8 +648,7 @@ module type S = sig
       -> output_file:string
       -> unit Deferred.Or_error.t
     val load_cmxs_file
-      :  ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
-      -> string
+      :  string
       -> t Or_error.t Deferred.t
     val blocking_load_cmxs_file : string -> t Or_error.t
   end
@@ -702,9 +695,7 @@ struct
   let load_ocaml_src_files t filenames =
     load_and_type_ocaml_src_files_without_running_them t filenames
     >>=? fun (`cmxs_filename _, make_plugin) ->
-    match t.run_plugin_toplevel with
-    | `In_async_thread  -> Deferred.return (run make_plugin)
-    | `Outside_of_async -> In_thread.run (fun () -> run make_plugin)
+    Deferred.return (run make_plugin)
   ;;
 
   let check_ocaml_src_files t filenames =
@@ -733,19 +724,14 @@ struct
           | Ok Type_equal.T -> run make_plugin
     ;;
 
-    let load_cmxs_file
-          ?(run_plugin_toplevel = default_run_plugin_toplevel)
-          cmxs_filename
-      =
+    let load_cmxs_file cmxs_filename =
       Compile.dynlink cmxs_filename
       >>=? fun (E (plugin_type, make_plugin)) ->
       match type_check plugin_type with
       | Error _ as e -> return e
       | Ok Type_equal.T ->
         let make_plugin : unit -> X.t = make_plugin in
-        match run_plugin_toplevel with
-        | `In_async_thread  -> Deferred.return (run make_plugin)
-        | `Outside_of_async -> In_thread.run (fun () -> run make_plugin)
+        Deferred.return (run make_plugin)
     ;;
   end
 end
@@ -785,8 +771,8 @@ module Side_effect = struct
       Expert.blocking_load_cmxs_file filename
       |> (Or_error.ignore : (module Side_effect) Or_error.t -> unit Or_error.t)
     ;;
-    let load_cmxs_file ?run_plugin_toplevel filename =
-      Expert.load_cmxs_file ?run_plugin_toplevel filename
+    let load_cmxs_file filename =
+      Expert.load_cmxs_file filename
       >>|? fun (_ : (module Side_effect)) -> ()
     ;;
   end

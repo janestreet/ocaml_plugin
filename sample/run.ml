@@ -203,7 +203,9 @@ struct
                   ++ temp_dir ()
                   ++ cmx_flag ()
                   ++ cmxs_flag ()
-                  ++ Ocaml_plugin.Shell.flags ())
+                  ++ Command.Spec.step (fun k () -> k)
+                  +> Ocaml_plugin.Shell.flags
+                 )
   ;;
 end
 

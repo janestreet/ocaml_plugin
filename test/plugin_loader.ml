@@ -6,7 +6,6 @@ let run
       ?use_cache
       ?persistent_archive_dirpath
       ~trigger_unused_value_warnings_despite_mli
-      ~run_plugin_toplevel
       ~find_dependencies
       files =
   Sys.getcwd () >>= fun cwd ->
@@ -17,7 +16,6 @@ let run
        Ocaml_compiler.with_compiler
          ~in_dir
          ~trigger_unused_value_warnings_despite_mli
-         ~run_plugin_toplevel
          ?use_cache
          ?persistent_archive_dirpath
          ~f:(fun compiler ->
@@ -38,7 +36,6 @@ let run
      Ocaml_compiler.Side_effect.load_ocaml_src_files
        ~in_dir
        ~trigger_unused_value_warnings_despite_mli
-       ~run_plugin_toplevel
        ?use_cache
        ?persistent_archive_dirpath
        files)
@@ -53,10 +50,11 @@ let groups l =
   List.map (String.split ~on:'|' (String.concat l ~sep:" ")) ~f:(fun s ->
     List.filter (String.split ~on:' ' s) ~f:(function
       | "" -> false
-      | _ -> true
-    ))
+      | _ -> true))
+;;
 
 let max_files_default = 2
+;;
 
 let use_cache ~max_files =
   Plugin_cache.Config.create
@@ -65,71 +63,40 @@ let use_cache ~max_files =
     ~readonly:false
     ~try_old_cache_with_new_exec:true
     ()
-
-module Flags = struct
-  open Command.Spec
-  let use_cache () =
-    map ~f:(fun b -> if b then Some use_cache else None)
-      (flag "--cache" no_arg ~doc:" use a plugin cache")
-
-  let cache_size () =
-    flag "--cache-size" (optional_with_default max_files_default int)
-      ~doc:(sprintf " specify size of plugin cache. default %d" max_files_default)
-
-  let persistent_archive () =
-    map ~f:(fun b -> if b then Some "cache" else None)
-      (flag "--persistent-archive" no_arg
-         ~doc:" use a persistent location for the extracted compiler")
-
-  let trigger_unused_value_warnings_despite_mli () =
-    flag "--warnings-in-utils" no_arg
-      ~doc:" trigger unused warnings even in utils with an mli"
-
-  let run_plugin_toplevel () =
-    map ~f:(fun b -> if b then `Outside_of_async else `In_async_thread)
-      (flag "--toplevel-outside-of-async" no_arg
-         ~doc:" execute plugin's toplevel outside of async")
-
-  let find_dependencies () =
-    flag "--find-dependencies" no_arg
-      ~doc:" use ocamldep to generate dependencies"
-
-  let anon_files () =
-    anon (sequence ("<ocaml-file>" %: file))
-end
+;;
 
 let command =
-  Command.async ~summary:"unit test program for ocaml-plugin"
-    Command.Spec.(
-      empty
-      ++ step (fun m use_cache cache_size ->
-        m (Option.map use_cache ~f:(fun f -> f ~max_files:cache_size)))
-      +> Flags.use_cache ()
-      +> Flags.cache_size ()
-      +> Flags.persistent_archive ()
-      +> Flags.trigger_unused_value_warnings_despite_mli ()
-      +> Flags.run_plugin_toplevel ()
-      +> Flags.find_dependencies ()
-      +> Flags.anon_files ()
-    ) (fun
-        use_cache
-        persistent_archive_dirpath
-        trigger_unused_value_warnings_despite_mli
-        run_plugin_toplevel
-        find_dependencies
-        files
-        ()
-        ->
-          Deferred.List.iter ~how:`Sequential (groups files) ~f:(
-            run
-              ?use_cache
-              ?persistent_archive_dirpath
-              ~trigger_unused_value_warnings_despite_mli
-              ~run_plugin_toplevel
-              ~find_dependencies
-          ) >>= fun () ->
-          return (Shutdown.shutdown 0)
-      )
+  Command.async' ~summary:"unit test program for ocaml-plugin"
+    (let open Command.Let_syntax in
+     let%map_open use_cache =
+       let%map cache = flag "--cache" no_arg ~doc:" use a plugin cache"
+       and cache_size =
+         flag "--cache-size" (optional_with_default max_files_default int)
+           ~doc:(sprintf " specify size of plugin cache. default %d" max_files_default)
+       in
+       if cache then Some (use_cache ~max_files:cache_size)
+       else None
+     and persistent_archive_dirpath =
+       map ~f:(fun b -> if b then Some "cache" else None)
+         (flag "--persistent-archive" no_arg
+            ~doc:" use a persistent location for the extracted compiler")
+     and trigger_unused_value_warnings_despite_mli =
+       flag "--warnings-in-utils" no_arg
+         ~doc:" trigger unused warnings even in utils with an mli"
+     and find_dependencies =
+       flag "--find-dependencies" no_arg
+         ~doc:" use ocamldep to generate dependencies"
+     and files =
+       anon (sequence ("<ocaml-file>" %: file))
+     in
+     fun () ->
+       let open! Deferred.Let_syntax in
+       Deferred.List.iter ~how:`Sequential (groups files) ~f:(
+         run
+           ?use_cache
+           ?persistent_archive_dirpath
+           ~trigger_unused_value_warnings_despite_mli
+           ~find_dependencies))
+;;
 
-let () =
-  Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
+let () = Command.run command

@@ -6,8 +6,8 @@ open! Async.Std
     running them, and verbose would print the full output of the command. *)
 val set_defaults : ?verbose:bool -> ?echo:bool -> unit -> unit
 
-(** Offers a command line spec to set verbose and echo directly. *)
-val flags : unit -> ('a, 'a) Command.Spec.t
+(** Offers a command line param to set verbose and echo directly. *)
+val flags : unit Command.Param.t
 
 val run :
   ?working_dir:string

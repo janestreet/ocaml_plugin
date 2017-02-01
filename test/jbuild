@@ -14,8 +14,7 @@
   (libraries
    (async
     core
-    ocaml_plugin))
-  (preprocess (pps ()))))
+    ocaml_plugin))))
 
 (enforce_style ())
 

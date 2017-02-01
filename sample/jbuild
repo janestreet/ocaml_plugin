@@ -10,7 +10,6 @@
     core
     core_kernel
     ocaml_plugin
-    sexplib))
-  (preprocess (pps ()))))
+    sexplib))))
 
 (enforce_style ())

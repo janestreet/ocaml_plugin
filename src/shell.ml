@@ -14,30 +14,23 @@ let set_defaults ?verbose:(v = !verbose) ?echo:(e = !echo) () =
   ()
 ;;
 
-module Process_flag =
-struct
+module Process_flag = struct
   let echo =
-    Command.Spec.(
-      flag
-        "-shell-echo"
-        no_arg
-        ~doc:" show external shell calls"
-    )
+    Command.Param.(
+      flag "-shell-echo" no_arg
+        ~doc:" show external shell calls")
   ;;
 
   let verbose =
-    Command.Spec.(
-      flag
-        "-shell-verbose"
-        no_arg
-        ~doc:" let external shell call be more verbose (imply -shell-echo)"
-    )
+    Command.Param.(
+      flag "-shell-verbose" no_arg
+        ~doc:" let external shell call be more verbose (imply -shell-echo)")
   ;;
 
-  let all () = Command.Spec.(step (fun main echo verbose ->
-    set_defaults ~echo ~verbose ();
-    main
-  ) +> echo +> verbose)
+  let all =
+    Command.Param.(
+      map2 echo verbose ~f:(fun echo verbose ->
+        set_defaults ~echo ~verbose ()))
   ;;
 end
 

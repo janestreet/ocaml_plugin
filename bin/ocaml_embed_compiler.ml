@@ -97,101 +97,84 @@ let generate_c_file target ~tar ~metadata =
 ;;
 
 let command =
-  Command.async
-    ~summary:"tool to embed ocamlopt and cmi files into a c file"
-    ~readme
-    Command.Spec.(
-      empty
-
-      ++ step (fun k ocamlopt_opt -> k ~ocamlopt_opt)
-      +> flag "-cc" (required file)
-           ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
-
-      ++ step (fun k ppx_exe -> k ~ppx_exe)
-      +> flag "-ppx" (optional file)
-           ~doc:"</path/to/ppx.exe> set the executable for ppx preprocessing"
-
-      ++ step (fun k ocamldep_opt -> k ~ocamldep_opt)
-      +> flag "-ocamldep" (optional file)
-           ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
-
-      ++ step (fun k target -> k ~target)
-      +> flag "-o" (required file)
-           ~doc:"<file.c> set the name of the c file to be created"
-
-      ++ step (fun k verbose -> k ~verbose)
-      +> flag "-verbose" no_arg ~doc:" be more verbose"
-
-      ++ step (fun k extra_files -> k ~extra_files)
-      +> anon (sequence ("<embedded-file>" %: file))
-    )
-    (fun
-      ~ocamlopt_opt
-      ~ppx_exe
-      ~ocamldep_opt
-      ~target
-      ~verbose
-      ~extra_files
-      () ->
-      let _set_defaults_scope =
-        Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
-      in
-      Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
-      let embedded_files = String.Table.create () in
-      let embed_file ~filename ~basename =
-        match Hashtbl.add embedded_files ~key:basename ~data:filename with
-        | `Ok -> ()
-        | `Duplicate ->
-          failwiths "cannot embed multiple files with the same basename"
-            basename [%sexp_of: string]
-      in
-      let cp ~filename ~basename =
-        embed_file ~filename ~basename;
-        Ocaml_plugin.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename)
-        >>| ok_exn
-      in
-      let copy_file filename =
-        let basename = Filename.basename filename in
-        cp ~filename ~basename >>| fun () ->
-        basename
-      in
-      let how = `Max_concurrent_jobs 10 in
-      Deferred.List.map ~how extra_files ~f:copy_file >>= fun (_ : string list) ->
-      cp ~filename:ocamlopt_opt ~basename:Ocaml_compiler.ocamlopt_opt >>= fun () ->
-      begin match ocamldep_opt with
-      | Some ocamldep_opt -> cp ~filename:ocamldep_opt ~basename:Ocaml_compiler.ocamldep_opt
-      | None -> return ()
-      end >>= fun () ->
-      begin match ppx_exe with
-      | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_compiler.ppx_exe
-      | None -> return ()
-      end >>= fun () ->
-      let tar = "a.tgz" in
-      Ocaml_plugin.Tar.create ~working_dir:tmpdir ~files:(Hashtbl.keys embedded_files) tar
-      >>=! fun () ->
-      Deferred.List.map ~how (Hashtbl.to_alist embedded_files) ~f:(fun (basename, filename) ->
-        Plugin_cache.Digest.file filename >>|? fun digest -> basename, digest)
-      >>| Or_error.combine_errors
-      >>=! fun digests_by_basename ->
-      let tar = tmpdir ^/ tar in
-      generate_c_file target ~tar
-        ~metadata:
-          { ppx_is_embedded = Option.is_some ppx_exe
-          ; archive_digests = String.Map.of_alist_exn digests_by_basename
-          }
-      >>= function
-      | Error exn ->
-        Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ]
-        >>|! fun () ->
-        raise exn
-      | Ok () ->
-        Ocaml_plugin.Tar.list tar >>=! fun files_in_tar ->
-        check_files_in_tar ~files_in_tar
-          ~expected:(String.Set.of_hashtbl_keys embedded_files);
-        Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ()
-    )
+  Command.async' ~readme ~summary:"tool to embed ocamlopt and cmi files into a c file"
+    (let open Command.Let_syntax in
+     let%map_open ocamlopt_opt =
+       flag "-cc" (required file)
+         ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
+     and ppx_exe =
+       flag "-ppx" (optional file)
+         ~doc:"</path/to/ppx.exe> set the executable for ppx preprocessing"
+     and ocamldep_opt =
+       flag "-ocamldep" (optional file)
+         ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
+     and target =
+       flag "-o" (required file)
+         ~doc:"<file.c> set the name of the c file to be created"
+     and verbose = flag "-verbose" no_arg ~doc:" be more verbose"
+     and extra_files = anon (sequence ("<embedded-file>" %: file))
+     in
+     fun () ->
+       let open! Deferred.Let_syntax in
+       let _set_defaults_scope =
+         Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
+       in
+       Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
+       let embedded_files = String.Table.create () in
+       let embed_file ~filename ~basename =
+         match Hashtbl.add embedded_files ~key:basename ~data:filename with
+         | `Ok -> ()
+         | `Duplicate ->
+           failwiths "cannot embed multiple files with the same basename"
+             basename [%sexp_of: string]
+       in
+       let cp ~filename ~basename =
+         embed_file ~filename ~basename;
+         Ocaml_plugin.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename)
+         >>| ok_exn
+       in
+       let copy_file filename =
+         let basename = Filename.basename filename in
+         cp ~filename ~basename >>| fun () ->
+         basename
+       in
+       let how = `Max_concurrent_jobs 10 in
+       Deferred.List.map ~how extra_files ~f:copy_file >>= fun (_ : string list) ->
+       cp ~filename:ocamlopt_opt ~basename:Ocaml_compiler.ocamlopt_opt >>= fun () ->
+       begin match ocamldep_opt with
+       | Some ocamldep_opt ->
+         cp ~filename:ocamldep_opt ~basename:Ocaml_compiler.ocamldep_opt
+       | None -> return ()
+       end >>= fun () ->
+       begin match ppx_exe with
+       | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_compiler.ppx_exe
+       | None -> return ()
+       end >>= fun () ->
+       let tar = "a.tgz" in
+       Ocaml_plugin.Tar.create
+         ~working_dir:tmpdir ~files:(Hashtbl.keys embedded_files) tar
+       >>=! fun () ->
+       Deferred.List.map ~how (Hashtbl.to_alist embedded_files)
+         ~f:(fun (basename, filename) ->
+           Plugin_cache.Digest.file filename >>|? fun digest -> basename, digest)
+       >>| Or_error.combine_errors
+       >>=! fun digests_by_basename ->
+       let tar = tmpdir ^/ tar in
+       generate_c_file target ~tar
+         ~metadata:
+           { ppx_is_embedded = Option.is_some ppx_exe
+           ; archive_digests = String.Map.of_alist_exn digests_by_basename
+           }
+       >>= function
+       | Error exn ->
+         Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ]
+         >>|! fun () ->
+         raise exn
+       | Ok () ->
+         Ocaml_plugin.Tar.list tar >>=! fun files_in_tar ->
+         check_files_in_tar ~files_in_tar
+           ~expected:(String.Set.of_hashtbl_keys embedded_files);
+         Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ())
 ;;
 
-let () =
-  Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
-;;
+let () = Command.run command

@@ -73,15 +73,6 @@ type 'a create_arguments =
   (** By default, there is no cache. If a config is given, cmxs files may be used from an
       execution to an other. *)
 
-  -> ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
-  (** If a plugin has some blocking calls at toplevel that are synchronous, one may want
-      to run the plugin's toplevel execution under an [In_thread.run] to make sure it is
-      not going to block the main thread. To do it, set this parameter to
-      [`Outside_of_async].  On the other hand, doing so will prevent the user from having
-      Async functions calls at toplevel, unless [Thread_safe] is used carefully.  The
-      default is [`In_async_thread], meaning this library tends to be more friendly with
-      async plugins, as it is probably the most common use for it.  *)
-
   -> 'a
 
 module Ppx : sig
@@ -265,10 +256,7 @@ module type S = sig
       -> output_file:string (** like -o option of gcc *)
       -> unit Deferred.Or_error.t
 
-    val load_cmxs_file
-      :  ?run_plugin_toplevel: [ `In_async_thread | `Outside_of_async ]
-      -> string
-      -> t Or_error.t Deferred.t
+    val load_cmxs_file : string -> t Or_error.t Deferred.t
 
     (** [blocking_load_cmxs_file] will return an error if called after the async scheduler
         has been started. *)

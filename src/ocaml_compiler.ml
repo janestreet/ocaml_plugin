@@ -259,7 +259,6 @@ let create
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
-      ?run_plugin_toplevel
       ?persistent_archive_dirpath
       () =
   let archive_lock = ref Archive_lock.Cleaned in
@@ -311,7 +310,6 @@ let create
     ~cmxs_flags
     ?trigger_unused_value_warnings_despite_mli
     ?use_cache
-    ?run_plugin_toplevel
     ~initialize
     ~compilation_config
     ~ocamlopt_opt
@@ -356,7 +354,6 @@ let with_compiler
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
-      ?run_plugin_toplevel
       ?persistent_archive_dirpath
       ~f
       ()
@@ -374,7 +371,6 @@ let with_compiler
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
-      ?run_plugin_toplevel
       ?persistent_archive_dirpath
       ()
     >>=? fun (`this_needs_manual_cleaning_after compiler) ->
@@ -406,7 +402,6 @@ let make_load_ocaml_src_files load_ocaml_src_files =
         ?cmxs_flags
         ?trigger_unused_value_warnings_despite_mli
         ?use_cache
-        ?run_plugin_toplevel
         ?persistent_archive_dirpath
         files =
     let f compiler =
@@ -423,7 +418,6 @@ let make_load_ocaml_src_files load_ocaml_src_files =
       ?cmxs_flags
       ?trigger_unused_value_warnings_despite_mli
       ?use_cache
-      ?run_plugin_toplevel
       ?persistent_archive_dirpath
       ~f
       ()
@@ -435,59 +429,56 @@ let make_check_plugin_cmd
       ~check_ocaml_src_files
       ~load_ocaml_src_files () =
   let execute_plugin_toplevel_switch = "-execute-plugin-toplevel" in
-  let arg_spec =
-    Command.Spec.(
-      empty
-      +> anon (sequence ("path/to/plugin.ml" %: file))
-      +> flag execute_plugin_toplevel_switch no_arg
-           ~doc:" Run the plugin's toplevel to check for runtime errors"
-      +> flag "-ocamldep" no_arg
-           ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
-      +> flag "-verbose" no_arg
-           ~doc:" Be more verbose"
-    )
-  in
-  let main plugin_filenames execute_plugin_toplevel use_ocamldep is_verbose
-        () =
-    let f compiler =
-      let loader = loader compiler in
-      (if use_ocamldep
-       then
-         (match plugin_filenames with
-          | [ main ] -> Ocaml_dynloader.find_dependencies loader main
-          | [] | _ :: _ :: _ ->
-            return
-              (Or_error.error "Give only the main file when using option -ocamldep"
-                 plugin_filenames [%sexp_of: string list]))
-       else return (Ok plugin_filenames)
-      ) >>=? fun plugin_filenames ->
-      if is_verbose then
-        Print.printf "checking: %s\n%!" (String.concat ~sep:" " plugin_filenames);
-      if execute_plugin_toplevel
-      then
-        load_ocaml_src_files loader plugin_filenames
-        >>| Or_error.map ~f:ignore
-      else
-        check_ocaml_src_files loader plugin_filenames
-    in
-    with_compiler ~f ()
-    >>| function
-    | Ok () ->
-      if is_verbose then Print.printf "ok\n%!";
-      Shutdown.shutdown 0
-    | Error err ->
-      Print.eprintf "%s\n%!" (Error.to_string_hum err);
-      Shutdown.shutdown 1
-  in
-  Command.async ~summary:"Check a plugin for compilation errors"
+  Command.async' ~summary:"Check a plugin for compilation errors"
     ~readme:(fun () -> String.concat [ "\
 This command checks that a plugin compiles.  It either succeeds quietly, or outputs
 compilation errors and fails.
 
 When it is deemed safe to execute the toplevel of a plugin, one can supply the switch
 [" ; execute_plugin_toplevel_switch ; "] to check for runtime exceptions at toplevel." ])
-    arg_spec
-    main
+    (let open Command.Let_syntax in
+     let%map_open plugin_filenames = anon (sequence ("path/to/plugin.ml" %: file))
+     and execute_plugin_toplevel =
+       flag execute_plugin_toplevel_switch no_arg
+         ~doc:" Run the plugin's toplevel to check for runtime errors"
+     and use_ocamldep =
+       flag "-ocamldep" no_arg
+         ~doc:" Use ocamldep. Expect only the main file in the remaining arguments"
+     and is_verbose =
+       flag "-verbose" no_arg
+         ~doc:" Be more verbose"
+     in
+     fun () ->
+       let open! Deferred.Let_syntax in
+       let f compiler =
+         let loader = loader compiler in
+         (if use_ocamldep
+          then
+            (match plugin_filenames with
+             | [ main ] -> Ocaml_dynloader.find_dependencies loader main
+             | [] | _ :: _ :: _ ->
+               return
+                 (Or_error.error "Give only the main file when using option -ocamldep"
+                    plugin_filenames [%sexp_of: string list]))
+          else return (Ok plugin_filenames)
+         ) >>=? fun plugin_filenames ->
+         if is_verbose then
+           Print.printf "checking: %s\n%!" (String.concat ~sep:" " plugin_filenames);
+         if execute_plugin_toplevel
+         then
+           load_ocaml_src_files loader plugin_filenames
+           >>| Or_error.map ~f:ignore
+         else
+           check_ocaml_src_files loader plugin_filenames
+       in
+       with_compiler ~f ()
+       >>| function
+       | Ok () ->
+         if is_verbose then Print.printf "ok\n%!";
+         Shutdown.shutdown 0
+       | Error err ->
+         Print.eprintf "%s\n%!" (Error.to_string_hum err);
+         Shutdown.shutdown 1)
 ;;
 
 module type S = sig
