@@ -8,7 +8,7 @@
     the cache is deleted (or just skipped if no write access). *)
 
 open! Core
-open! Async.Std
+open! Async
 
 (** Mutable type containing information about the cached files. *)
 type t

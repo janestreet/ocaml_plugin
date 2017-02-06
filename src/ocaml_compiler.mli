@@ -6,7 +6,7 @@
     This is meant to be used in unix only, in particular because it uses /proc to
     determine the location of the exec code being run. *)
 open! Core
-open! Async.Std
+open! Async
 
 (**
    The convention over the name of the executables inside the archive.

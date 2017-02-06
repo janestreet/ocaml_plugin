@@ -1,5 +1,5 @@
 open! Core
-open! Async.Std
+open! Async
 
 val create : working_dir:string -> files:string list -> string -> unit Deferred.Or_error.t
 val extract : working_dir:string -> string -> unit Deferred.Or_error.t

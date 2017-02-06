@@ -1,5 +1,5 @@
 open! Core
-open! Async.Std
+open! Async
 
 
 (** Global properties regarding bash sys calls. Echo would print the command before

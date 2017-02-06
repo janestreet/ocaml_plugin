@@ -9,7 +9,7 @@
 *)
 
 open Core
-open Async.Std
+open Async
 open Ocaml_plugin.Std
 
 module Plugin = Ocaml_dynloader.Make(struct

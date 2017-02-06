@@ -1,5 +1,5 @@
 open Core
-open Async.Std
+open Async
 open Ocaml_plugin.Std
 
 let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)

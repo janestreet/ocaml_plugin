@@ -33,7 +33,7 @@ module Stable = struct
 end
 
 open Core
-open Async.Std
+open Async
 open Import
 
 module Build_info : sig

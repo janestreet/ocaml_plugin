@@ -1,5 +1,5 @@
 open! Core
-open! Async.Std
+open! Async
 
 (** Ocaml plugin loader, from ocaml source file.  Wrapper around Dynlink module, including
     on the fly async ocaml compilation.

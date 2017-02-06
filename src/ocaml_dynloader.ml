@@ -1,5 +1,5 @@
 open Core
-open Async.Std
+open Async
 
 let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58]
 ;;
@@ -327,7 +327,7 @@ module Compile : sig
     -> ?export:bool
     -> compilation_directory:Compilation_directory.t
     -> basename:Core.String.Hash_set.elt
-    -> (string * packed_plugin) Async.Std.Deferred.Or_error.t
+    -> (string * packed_plugin) Async.Deferred.Or_error.t
 
 end = struct
 
