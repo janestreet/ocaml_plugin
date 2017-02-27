@@ -14,3 +14,5 @@
 (enforce_style ())
 
 (provides (ocaml-embed-compiler (file ocaml_embed_compiler.exe)))
+
+(jbuild_version jane_street)

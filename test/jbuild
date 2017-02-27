@@ -47,3 +47,5 @@
 (unified_tests
  ((deps (plugin_loader.exe))
   (setup_script setup-script)))
+
+(jbuild_version jane_street)

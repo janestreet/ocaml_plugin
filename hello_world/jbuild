@@ -19,3 +19,5 @@
   (modules (run plugin_intf))))
 
 (enforce_style ())
+
+(jbuild_version jane_street)
