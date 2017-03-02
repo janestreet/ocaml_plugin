@@ -4,14 +4,14 @@
    (async
     core
     ocaml_plugin
-    sexplib))))
+    sexplib))
+  (preprocess (pps (ppx_jane)))))
 
 (install
  ((section bin)
   (files
    ((ocaml_embed_compiler.exe as ocaml-embed-compiler)))))
 
-(enforce_style ())
 
 (provides (ocaml-embed-compiler (file ocaml_embed_compiler.exe)))
 

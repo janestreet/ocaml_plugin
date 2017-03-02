@@ -5,6 +5,5 @@
   (flags (:standard -I +ocamlbuild))
   (preprocess no_preprocessing)))
 
-(enforce_style ())
 
 (jbuild_version jane_street)

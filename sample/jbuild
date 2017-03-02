@@ -1,6 +1,3 @@
-(embed
- ((names (run))
-  (cmis (dsl))))
 
 (executables
  ((names (run))
@@ -10,8 +7,8 @@
     core
     core_kernel
     ocaml_plugin
-    sexplib))))
+    sexplib))
+  (preprocess (pps (ppx_jane)))))
 
-(enforce_style ())
 
 (jbuild_version jane_street)

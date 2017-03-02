@@ -1,7 +1,7 @@
 (library
  ((name ocaml_plugin_user_with_unit_tests)
-  (libraries (ocaml_plugin))))
+  (libraries (ocaml_plugin))
+  (preprocess (pps (ppx_jane)))))
 
-(enforce_style ())
 
 (jbuild_version jane_street)

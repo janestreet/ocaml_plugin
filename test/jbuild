@@ -1,12 +1,3 @@
-(embed
- ((names (plugin_loader))
-  (libraries
-   (async
-    core
-    core_kernel
-    fieldslib
-    sexplib))
-  (pps (ppx_jane))))
 
 (executables
  ((names (plugin_loader))
@@ -14,9 +5,9 @@
   (libraries
    (async
     core
-    ocaml_plugin))))
+    ocaml_plugin))
+  (preprocess (pps (ppx_jane)))))
 
-(enforce_style ())
 
 (alias
  ((name runtest)
@@ -24,7 +15,7 @@
          test_with_sexp.ml
          test_with_sexp.mli))
   (action "./plugin_loader.exe test_with_sexp.mli")
-  (sandbox ignore_targets)))
+))
 
 (alias
  ((name runtest)
@@ -32,7 +23,7 @@
          test_with_sexp.ml
          test_with_sexp.mli))
   (action "./plugin_loader.exe test_with_sexp.ml")
-  (sandbox ignore_targets)))
+))
 
 (alias
  ((name runtest)
@@ -42,10 +33,7 @@
          test_with_sexp_dep.ml
          test_with_sexp_dep.mli))
   (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")
-  (sandbox ignore_targets)))
+))
 
-(unified_tests
- ((deps (plugin_loader.exe))
-  (setup_script setup-script)))
 
 (jbuild_version jane_street)

@@ -1,12 +1,3 @@
-(embed
- ((names (run))
-  (libraries
-   (core
-    core_kernel
-    fieldslib
-    sexplib))
-  (cmis (plugin_intf))
-  (pps (ppx_jane))))
 
 (executables
  ((names (run))
@@ -16,8 +7,8 @@
     core
     ocaml_plugin
     sexplib))
-  (modules (run plugin_intf))))
+  (modules (run plugin_intf))
+  (preprocess (pps (ppx_jane)))))
 
-(enforce_style ())
 
 (jbuild_version jane_street)
