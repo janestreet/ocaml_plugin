@@ -14,7 +14,7 @@
   (deps (plugin_loader.exe
          test_with_sexp.ml
          test_with_sexp.mli))
-  (action "./plugin_loader.exe test_with_sexp.mli")
+  (action (bash "./plugin_loader.exe test_with_sexp.mli"))
 ))
 
 (alias
@@ -22,7 +22,7 @@
   (deps (plugin_loader.exe
          test_with_sexp.ml
          test_with_sexp.mli))
-  (action "./plugin_loader.exe test_with_sexp.ml")
+  (action (bash "./plugin_loader.exe test_with_sexp.ml"))
 ))
 
 (alias
@@ -32,7 +32,7 @@
          test_with_sexp.mli
          test_with_sexp_dep.ml
          test_with_sexp_dep.mli))
-  (action "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml")
+  (action (bash "./plugin_loader.exe --find-dependencies test_with_sexp_dep.ml"))
 ))
 
 
