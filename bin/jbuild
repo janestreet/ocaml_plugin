@@ -5,7 +5,7 @@
     core
     ocaml_plugin
     sexplib))
-  (preprocess (pps (ppx_jane)))))
+  (preprocess (pps (ppx_jane ppx_driver.runner)))))
 
 (install
  ((section bin)

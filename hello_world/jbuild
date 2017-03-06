@@ -8,7 +8,7 @@
     ocaml_plugin
     sexplib))
   (modules (run plugin_intf))
-  (preprocess (pps (ppx_jane)))))
+  (preprocess (pps (ppx_jane ppx_driver.runner)))))
 
 
 (jbuild_version jane_street)

@@ -3,7 +3,7 @@
   (public_name ocaml_plugin)
   (libraries (async core dynlink sexplib))
   (c_names (ocaml_fake_archive))
-  (preprocess (pps (ppx_jane)))))
+  (preprocess (pps (ppx_jane ppx_driver.runner)))))
 
 
 (jbuild_version jane_street)

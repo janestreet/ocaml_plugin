@@ -8,7 +8,7 @@
     core_kernel
     ocaml_plugin
     sexplib))
-  (preprocess (pps (ppx_jane)))))
+  (preprocess (pps (ppx_jane ppx_driver.runner)))))
 
 
 (jbuild_version jane_street)
