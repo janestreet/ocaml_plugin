@@ -1,4 +1,5 @@
 opam-version: "1.2"
+version: "v0.9.0"
 maintainer: "opensource@janestreet.com"
 authors: ["Jane Street Group, LLC <opensource@janestreet.com>"]
 homepage: "https://github.com/janestreet/ocaml_plugin"
@@ -9,12 +10,12 @@ build: [
   ["jbuilder" "build" "--only-packages" "ocaml_plugin" "--root" "." "-j" jobs "@install"]
 ]
 depends: [
-  "async"
-  "core"
+  "async"                   {>= "v0.9" & < "v0.10"}
+  "core"                    {>= "v0.9" & < "v0.10"}
   "jbuilder"                {build & >= "1.0+beta2"}
-  "ppx_driver"
-  "ppx_jane"
-  "sexplib"
+  "ppx_driver"              {>= "v0.9" & < "v0.10"}
+  "ppx_jane"                {>= "v0.9" & < "v0.10"}
+  "sexplib"                 {>= "v0.9" & < "v0.10"}
   "ocaml-migrate-parsetree" {>= "0.4"}
   "ocamlbuild"
 ]
