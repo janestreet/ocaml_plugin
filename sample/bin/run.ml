@@ -232,10 +232,10 @@ let handle_error load = function
 let load_file loader = function
   | `v1 files ->
     let v1 = Config.V1.Load.load_ocaml_src_files loader (Flags.split_files files) in
-    v1 >>| (handle_error Dsl.register_v1)
+    v1 >>| (handle_error Ocaml_plugin_sample.Dsl.register_v1)
   | `v2 files ->
     let v2 = Config.V2.Load.load_ocaml_src_files loader (Flags.split_files files) in
-    v2 >>| (handle_error Dsl.register_v2)
+    v2 >>| (handle_error Ocaml_plugin_sample.Dsl.register_v2)
   | `util files ->
     let res =
       Ocaml_dynloader.Side_effect.load_ocaml_src_files loader (Flags.split_files files)
@@ -246,7 +246,7 @@ let load_file loader = function
 let load_default loader =
   load_file loader (`v1 conf_01) >>= fun () ->
   let v2 = Config.V2.Load.load_ocaml_src_files loader [conf_util;conf_02] in
-  v2 >>| (handle_error Dsl.register_v2)
+  v2 >>| (handle_error Ocaml_plugin_sample.Dsl.register_v2)
 ;;
 
 let main () () =
@@ -301,7 +301,7 @@ let main () () =
     (if !load_error then load_file loader (`v1 conf_v1_error) else Deferred.return ())
     >>= fun () ->
     (Deferred.Queue.iter ~f:(load_file loader) files)
-    >>| Dsl.exec
+    >>| Ocaml_plugin_sample.Dsl.exec
     >>= fun () ->
     (if !clean then k_clean () else Deferred.return (Ok ())) >>| function
     | Error e -> Error.raise e

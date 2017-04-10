@@ -11,7 +11,7 @@ end
   We open the main Api to simulate DSL keywords
   make, register, etc...
 *)
-open Dsl
+open Ocaml_plugin_sample.Dsl
 
 (** in a sexp DSL, this would be:
 (job something)

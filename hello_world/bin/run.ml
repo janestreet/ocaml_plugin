@@ -13,10 +13,10 @@ open Async
 open Ocaml_plugin.Std
 
 module Plugin = Ocaml_dynloader.Make(struct
-    type t = (module Plugin_intf.S)
-    let t_repr = "Plugin_intf.S"
-    let univ_constr = Plugin_intf.univ_constr
-    let univ_constr_repr = "Plugin_intf.univ_constr"
+    type t = (module Ocaml_plugin_hello_world.Plugin_intf.S)
+    let t_repr = "Ocaml_plugin_hello_world.Plugin_intf.S"
+    let univ_constr = Ocaml_plugin_hello_world.Plugin_intf.univ_constr
+    let univ_constr_repr = "Ocaml_plugin_hello_world.Plugin_intf.univ_constr"
   end)
 
 let () =
@@ -63,7 +63,7 @@ let () =
               Core.Printf.eprintf "loading failed:\n%s\n%!" (Error.to_string_hum err);
               loop ()
             | Ok plugin ->
-              let module M = (val plugin : Plugin_intf.S) in
+              let module M = (val plugin : Ocaml_plugin_hello_world.Plugin_intf.S) in
               Core.Printf.printf "loaded plugin's message : %S\n%!" M.message;
               loop ()
           in

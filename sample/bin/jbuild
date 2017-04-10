@@ -3,10 +3,10 @@
  ((names (run))
   (libraries
    (async
-    bin_prot
     core
     core_kernel
     ocaml_plugin
+    ocaml_plugin_sample
     sexplib))
   (preprocess (pps (ppx_jane ppx_driver.runner)))))
 

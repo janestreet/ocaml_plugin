@@ -1,0 +1,7 @@
+(library
+ ((name ocaml_plugin_sample)
+  (libraries (core ocaml_plugin sexplib))
+  (preprocess (pps (ppx_jane ppx_driver.runner)))))
+
+
+(jbuild_version 1)
