@@ -11,6 +11,7 @@ val flags : unit Command.Param.t
 
 val run :
   ?working_dir:string
+  -> ?env:Unix.env
   -> ?quiet_or_error:bool
   -> string
   -> string list
@@ -18,6 +19,7 @@ val run :
 
 val run_lines :
   ?working_dir:string
+  -> ?env:Unix.env
   -> string
   -> string list
   -> string list Deferred.Or_error.t

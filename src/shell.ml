@@ -40,14 +40,14 @@ let flags = Process_flag.all
 let endline std = if std = "" then std else std ^ "\n"
 ;;
 
-let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
+let make_run from_output ?working_dir ?env ?(quiet_or_error = false) prog args =
   let command_text =
     lazy (prog::args |> [%sexp_of: string list] |> Sexp.to_string)
   in
   if !echo then
     Core.Printf.printf "Shell: %s\n%!" (force command_text);
 
-  Process.create ?working_dir ~prog ~args () >>=? fun process ->
+  Process.create ?working_dir ?env ~prog ~args () >>=? fun process ->
   Process.collect_output_and_wait process >>| fun output ->
   let { Process.Output.stdout ; stderr ; exit_status } = output in
 
@@ -80,8 +80,11 @@ let make_run from_output ?working_dir ?(quiet_or_error = false) prog args =
                            ([%sexp_of: Core.Unix.Exit_or_signal.error] status)
         | None -> "error trace on stdout or stderr"
       in
-      sprintf "working_dir: %s\nstatus: %s\ncommand: %s\n%s%s"
+      sprintf "working_dir: %s\n%sstatus: %s\ncommand: %s\n%s%s"
         working_dir
+        (match env with
+         | None -> ""
+         | Some env -> sprintf !"environment: %{sexp#mach:Unix.env}" env)
         status
         (force command_text)
         stdout
