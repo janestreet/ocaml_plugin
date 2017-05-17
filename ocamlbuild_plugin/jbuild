@@ -1,5 +1,5 @@
 (library
- ((name        ocaml_plugin_ocamlbuild)
+ (  (name        ocaml_plugin_ocamlbuild)
   (public_name ocaml_plugin.ocamlbuild)
   (libraries (ocamlbuild))
   (flags (:standard -I +ocamlbuild))

@@ -1,7 +1,7 @@
 open Core
 open Async
 
-let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58]
+let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 60]
 ;;
 
 (* The default policy about warnings *)

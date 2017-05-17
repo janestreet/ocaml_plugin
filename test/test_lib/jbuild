@@ -1,6 +1,8 @@
 (library
  ((name ocaml_plugin_user_with_unit_tests)
-  (libraries (ocaml_plugin))
+  (libraries
+   (core
+    ocaml_plugin))
   (preprocess (pps (ppx_jane ppx_driver.runner)))))
 
 
