@@ -15,5 +15,5 @@ function setup {
 }
 export -f setup
 
-export TEST_DIR="$(readlink -f $(dirname "$0"))"
+export TEST_DIR="$(readlink -f $(dirname "$BASH_SOURCE"))"
 cd "$TEST_DIR"
