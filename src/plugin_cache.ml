@@ -49,14 +49,14 @@ end = struct
 end
 
 type filename = string [@@deriving sexp, compare]
-type basename = string [@@deriving sexp, compare]
+type basename = string [@@deriving sexp, compare, hash]
 
 let parallel list ~f =
   Deferred.Or_error.List.iter ~how:`Parallel list ~f
 ;;
 
 module Digest : sig
-  type t [@@deriving compare, sexp]
+  type t [@@deriving compare, hash, sexp]
   include Stringable with type t := t
   val file : filename -> t Deferred.Or_error.t
   val string : string -> t
@@ -77,8 +77,7 @@ end
 
 module Key = struct
   module T = struct
-    type t = (basename * Digest.t) list [@@deriving sexp, compare]
-    let hash = Hashtbl.hash
+    type t = (basename * Digest.t) list [@@deriving sexp, compare, hash]
   end
   include T
   include Hashable.Make (T)
@@ -132,8 +131,7 @@ end = struct
 
   module Key = struct
     module T = struct
-      type t = string list [@@deriving sexp, compare]
-      let hash = Hashtbl.hash
+      type t = string list [@@deriving sexp, compare, hash]
     end
     include T
     include Hashable.Make (T)

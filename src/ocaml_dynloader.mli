@@ -142,7 +142,7 @@ sig
   (** The type [t] is the type of a first level module you want to load.  This is
       typically the type of your expected config file, as a top level ocaml module.
 
-      The field [repr] is the concrete OCaml syntax for this module type.
+      The field [t_repr] is the concrete OCaml syntax for this module type.
 
       The field [univ_constr] is used to constr and match_ values of type t, embedded
       in a value of type Univ.t.
@@ -157,19 +157,19 @@ sig
         module My_config_loader = Ocaml_plugin.Ocaml_dynloader.Make (
         struct
           type t = (module A.S)
-          let repr = "Mylib.A.S"
+          let t_repr = "Mylib.A.S"
           let univ_constr = A.univ_constr
           let univ_constr_repr = "Mylib.A.univ_constr"
         end)
       ]}
 
-      [repr] and [univ_constr_repr] should be contain complete paths, as it would be used
-      by an ocaml file to link with the shared cmi files, in particular be aware that if
-      you have some 'open' statements in your file, you might have different t and repr,
-      which is a bad practice.
+      [t_repr] and [univ_constr_repr] should be complete paths, as it would be used by an
+      ocaml file to link with the shared cmi files, in particular be aware that
+      if you have some 'open' statements in your file, you might have different t and
+      t_repr, which is a bad practice.
 
       If the module type [A.M_intf] is defined in a package, you would need to add it in
-      the repr, as it is part of the complete path of the module type ("Mylib" in the
+      the t_repr, as it is part of the complete path of the module type ("Mylib" in the
       example). *)
   type t
   val t_repr : string
