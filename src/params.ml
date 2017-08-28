@@ -2,7 +2,7 @@
 
    {[
      let build_info_as_sexp =
-       Sexplib.Sexp.Atom (Digest.to_hex (Digest.file Sys.executable_name))
+       Sexplib.Sexp.Atom (Md5.to_hex (Md5.digest_file_blocking Sys.executable_name))
 
      let version = "NO_VERSION_UTIL"
    ]}

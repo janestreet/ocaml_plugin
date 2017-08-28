@@ -63,15 +63,15 @@ module Digest : sig
 end = struct
   include String
 
-  let to_hex fct arg = Digest.to_hex (fct arg)
+  let to_hex fct arg = Md5.to_hex (fct arg)
   ;;
 
   let file arg =
-    let fct () = to_hex Digest.file arg in
+    let fct () = to_hex Md5.digest_file_blocking arg in
     Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
   ;;
 
-  let string arg = to_hex Digest.string arg
+  let string arg = to_hex Md5.digest_string arg
   ;;
 end
 
@@ -559,6 +559,5 @@ let filenames_from_ml_bundles lst =
 let digest files =
   let files = filenames_from_ml_bundles files in
   Deferred.Or_error.List.map ~how:`Parallel files ~f:(fun file ->
-    Digest.file file >>|? (fun digest -> file, digest)
-  )
+    Digest.file file >>|? (fun digest -> file, digest))
 ;;

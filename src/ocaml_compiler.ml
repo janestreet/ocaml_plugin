@@ -141,7 +141,6 @@ module Plugin_archive : sig
     -> string
     -> unit Deferred.Or_error.t
 end = struct
-  module Digest = Plugin_cache.Digest
   module Info = struct
     type t =
       { infos          : (string * Sexp.t) list
