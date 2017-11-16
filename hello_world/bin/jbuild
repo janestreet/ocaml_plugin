@@ -1,6 +1,7 @@
 
 (executables
  ((names (run))
+  (flags (:standard -safe-string))
   (libraries
    (async
     core

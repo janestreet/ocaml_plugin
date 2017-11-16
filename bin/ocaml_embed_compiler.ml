@@ -97,7 +97,7 @@ let generate_c_file target ~tar ~metadata =
 ;;
 
 let command =
-  Command.async' ~readme ~summary:"tool to embed ocamlopt and cmi files into a c file"
+  Command.async ~readme ~summary:"tool to embed ocamlopt and cmi files into a c file"
     (let open Command.Let_syntax in
      let%map_open ocamlopt_opt =
        flag "-cc" (required file)

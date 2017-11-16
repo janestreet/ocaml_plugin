@@ -1,6 +1,7 @@
 (library
  ((name ocaml_plugin)
   (public_name ocaml_plugin)
+  (flags (:standard -safe-string))
   (libraries (async core dynlink sexplib))
   (c_names (ocaml_fake_archive))
   (preprocess (pps (ppx_jane ppx_driver.runner)))))

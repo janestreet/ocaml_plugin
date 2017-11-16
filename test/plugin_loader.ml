@@ -66,7 +66,7 @@ let use_cache ~max_files =
 ;;
 
 let command =
-  Command.async' ~summary:"unit test program for ocaml-plugin"
+  Command.async ~summary:"unit test program for ocaml-plugin"
     (let open Command.Let_syntax in
      let%map_open use_cache =
        let%map cache = flag "--cache" no_arg ~doc:" use a plugin cache"

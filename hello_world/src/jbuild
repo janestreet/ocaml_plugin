@@ -1,5 +1,6 @@
 (library
  ((name ocaml_plugin_hello_world)
+  (flags (:standard -safe-string))
   (libraries (core ocaml_plugin sexplib))
   (preprocess (pps (ppx_jane ppx_driver.runner)))))
 

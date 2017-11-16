@@ -428,7 +428,7 @@ let make_check_plugin_cmd
       ~check_ocaml_src_files
       ~load_ocaml_src_files () =
   let execute_plugin_toplevel_switch = "-execute-plugin-toplevel" in
-  Command.async' ~summary:"Check a plugin for compilation errors"
+  Command.async ~summary:"Check a plugin for compilation errors"
     ~readme:(fun () -> String.concat [ "\
 This command checks that a plugin compiles.  It either succeeds quietly, or outputs
 compilation errors and fails.
