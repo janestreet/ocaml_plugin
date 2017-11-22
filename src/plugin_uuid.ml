@@ -21,7 +21,7 @@ end
 
 module V1 = struct
   type t =
-    { uuid       : Uuid.t
+    { uuid       : Uuid.Stable.V1.t
     ; ml_bundles : Ml_bundle.t list
     ; repr       : Repr.t option
     }
@@ -31,7 +31,7 @@ end
 module V2 = struct
   module Prev = V1
   type t =
-    { uuid       : Uuid.t
+    { uuid       : Uuid.Stable.V1.t
     ; ml_bundles : Ml_bundle.t list
     ; repr       : Repr.t
     }
