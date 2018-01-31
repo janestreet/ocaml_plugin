@@ -1,6 +1,5 @@
 open Core
 open Async
-open Ocaml_plugin.Std
 
 (*
    For that sample, we will assume that the command ocamlopt.opt
@@ -204,7 +203,7 @@ struct
                   ++ cmx_flag ()
                   ++ cmxs_flag ()
                   ++ Command.Spec.step (fun k () -> k)
-                  +> Ocaml_plugin.Shell.flags
+                  +> Ocaml_plugin.Private.Shell.flags
                  )
   ;;
 end
@@ -238,7 +237,7 @@ let load_file loader = function
     v2 >>| (handle_error Ocaml_plugin_sample.Dsl.register_v2)
   | `util files ->
     let res =
-      Ocaml_dynloader.Side_effect.load_ocaml_src_files loader (Flags.split_files files)
+      Ocaml_plugin.Dynloader.Side_effect.load_ocaml_src_files loader (Flags.split_files files)
     in
     res >>| (handle_error ignore)
 ;;
@@ -266,7 +265,7 @@ let main () () =
     if !embed_mode
     then
       let build =
-        Ocaml_compiler.create
+        Ocaml_plugin.Compiler.create
           ~include_directories
           ~cmx_flags
           ~cmxs_flags
@@ -278,10 +277,10 @@ let main () () =
         exit 1
       | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
         return
-          ((fun () -> Ocaml_compiler.clean ocaml_compiler),
-           Ocaml_compiler.loader ocaml_compiler)
+          ((fun () -> Ocaml_plugin.Compiler.clean ocaml_compiler),
+           Ocaml_plugin.Compiler.loader ocaml_compiler)
     else
-      Ocaml_dynloader.create
+      Ocaml_plugin.Dynloader.create
         ?in_dir:compilation_directory
         ~cmx_flags
         ~cmxs_flags
@@ -291,7 +290,7 @@ let main () () =
       >>| function
       | Error e -> Error.raise e
       | Ok loader ->
-        ((fun () -> Ocaml_dynloader.clean loader),
+        ((fun () -> Ocaml_plugin.Dynloader.clean loader),
          loader)
   in
   let dt =

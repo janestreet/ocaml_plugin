@@ -1,6 +1,5 @@
 open Core
 open Async
-open Ocaml_plugin.Std
 
 let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)
 let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
@@ -9,7 +8,7 @@ let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)
 let readme () = "\
 This tool archives ocamlopt, cmis and preprocessors in a c file containing a big static
  string. The resulting .o file should be linked with any executable that uses
- Ocaml_plugin.Ocaml_compiler module. Or you can link your executable with a .o file
+ Ocaml_plugin.Compiler module. Or you can link your executable with a .o file
  containing a dummy definition of the function ocaml_plugin_archive if you know you will
  not need it."
 ;;
@@ -91,7 +90,7 @@ let generate_c_file target ~tar ~metadata =
       Writer.write writer "\n";
       Printf.ksprintf (Writer.write writer)
         ocaml_plugin_archive_metadata_template
-        (Sexp.to_string_mach (Ocaml_compiler.Archive_metadata.sexp_of_t metadata));
+        (Sexp.to_string_mach (Ocaml_plugin.Compiler.Archive_metadata.sexp_of_t metadata));
     )
   )
 ;;
@@ -117,9 +116,9 @@ let command =
      fun () ->
        let open! Deferred.Let_syntax in
        let _set_defaults_scope =
-         Ocaml_plugin.Shell.set_defaults ~verbose ~echo:verbose ();
+         Ocaml_plugin.Private.Shell.set_defaults ~verbose ~echo:verbose ();
        in
-       Ocaml_plugin.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
+       Ocaml_plugin.Private.Shell.temp_dir ~in_dir:Filename.temp_dir_name () >>=! fun tmpdir ->
        let embedded_files = String.Table.create () in
        let embed_file ~filename ~basename =
          match Hashtbl.add embedded_files ~key:basename ~data:filename with
@@ -130,7 +129,7 @@ let command =
        in
        let cp ~filename ~basename =
          embed_file ~filename ~basename;
-         Ocaml_plugin.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename)
+         Ocaml_plugin.Private.Shell.cp ~source:filename ~dest:(tmpdir ^/ basename)
          >>| ok_exn
        in
        let copy_file filename =
@@ -140,23 +139,23 @@ let command =
        in
        let how = `Max_concurrent_jobs 10 in
        Deferred.List.map ~how extra_files ~f:copy_file >>= fun (_ : string list) ->
-       cp ~filename:ocamlopt_opt ~basename:Ocaml_compiler.ocamlopt_opt >>= fun () ->
+       cp ~filename:ocamlopt_opt ~basename:Ocaml_plugin.Compiler.ocamlopt_opt >>= fun () ->
        begin match ocamldep_opt with
        | Some ocamldep_opt ->
-         cp ~filename:ocamldep_opt ~basename:Ocaml_compiler.ocamldep_opt
+         cp ~filename:ocamldep_opt ~basename:Ocaml_plugin.Compiler.ocamldep_opt
        | None -> return ()
        end >>= fun () ->
        begin match ppx_exe with
-       | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_compiler.ppx_exe
+       | Some ppx_exe -> cp ~filename:ppx_exe ~basename:Ocaml_plugin.Compiler.ppx_exe
        | None -> return ()
        end >>= fun () ->
        let tar = "a.tgz" in
-       Ocaml_plugin.Tar.create
+       Ocaml_plugin.Private.Tar.create
          ~working_dir:tmpdir ~files:(Hashtbl.keys embedded_files) tar
        >>=! fun () ->
        Deferred.List.map ~how (Hashtbl.to_alist embedded_files)
          ~f:(fun (basename, filename) ->
-           Plugin_cache.Digest.file filename >>|? fun digest -> basename, digest)
+           Ocaml_plugin.Plugin_cache.Digest.file filename >>|? fun digest -> basename, digest)
        >>| Or_error.combine_errors
        >>=! fun digests_by_basename ->
        let tar = tmpdir ^/ tar in
@@ -167,14 +166,14 @@ let command =
            }
        >>= function
        | Error exn ->
-         Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ]
+         Ocaml_plugin.Private.Shell.rm ~r:() ~f:() [ tmpdir ]
          >>|! fun () ->
          raise exn
        | Ok () ->
-         Ocaml_plugin.Tar.list tar >>=! fun files_in_tar ->
+         Ocaml_plugin.Private.Tar.list tar >>=! fun files_in_tar ->
          check_files_in_tar ~files_in_tar
            ~expected:(String.Set.of_hashtbl_keys embedded_files);
-         Ocaml_plugin.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ())
+         Ocaml_plugin.Private.Shell.rm ~r:() ~f:() [ tmpdir ] >>|! fun () -> ())
 ;;
 
 let () = Command.run command

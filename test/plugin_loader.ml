@@ -1,6 +1,5 @@
 open Core
 open Async
-open Ocaml_plugin.Std
 
 let run
       ?use_cache
@@ -13,27 +12,27 @@ let run
   (if find_dependencies
    then match files with
      | [file] ->
-       Ocaml_compiler.with_compiler
+       Ocaml_plugin.Compiler.with_compiler
          ~in_dir
          ~trigger_unused_value_warnings_despite_mli
          ?use_cache
          ?persistent_archive_dirpath
          ~f:(fun compiler ->
-           let loader = Ocaml_compiler.loader compiler in
-           Ocaml_dynloader.find_dependencies loader file >>=? fun files ->
+           let loader = Ocaml_plugin.Compiler.loader compiler in
+           Ocaml_plugin.Dynloader.find_dependencies loader file >>=? fun files ->
            begin match Sys.getenv "VERBOSE" with
            | None -> ()
            | Some _ ->
              Core.Printf.printf "Loaded %s\n"
                (String.concat (List.map files ~f:Filename.basename) ~sep:" ")
            end;
-           Ocaml_dynloader.Side_effect.load_ocaml_src_files loader files
+           Ocaml_plugin.Dynloader.Side_effect.load_ocaml_src_files loader files
          )
          ()
      | _ ->
        failwithf "When --find-dependencies is specified, only one file should be given" ()
    else
-     Ocaml_compiler.Side_effect.load_ocaml_src_files
+     Ocaml_plugin.Compiler.Side_effect.load_ocaml_src_files
        ~in_dir
        ~trigger_unused_value_warnings_despite_mli
        ?use_cache
@@ -57,7 +56,7 @@ let max_files_default = 2
 ;;
 
 let use_cache ~max_files =
-  Plugin_cache.Config.create
+  Ocaml_plugin.Plugin_cache.Config.create
     ~dir:"cache"
     ~max_files
     ~readonly:false

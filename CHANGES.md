@@ -1,3 +1,11 @@
+## git version
+
+- Rework the API of Ocaml_plugin to use the new stdless idiom. (Keep the old one
+  as deprecated)
+  Also, the following modules were renamed:
+  + `Ocaml_plugin.Std.Ocaml_dynloader` is now accessible at `Ocaml_plugin.Dynloader`
+  + `Ocaml_plugin.Std.Ocaml_compiler` is now accessible at `Ocaml_plugin.Compiler`
+
 ## 113.43.00
 
 - In Ocaml_plugin, drop `t_of_sexp` on an unstable type not meant to expose this.

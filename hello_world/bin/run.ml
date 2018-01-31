@@ -10,9 +10,8 @@
 
 open Core
 open Async
-open Ocaml_plugin.Std
 
-module Plugin = Ocaml_dynloader.Make(struct
+module Plugin = Ocaml_plugin.Dynloader.Make(struct
     type t = (module Ocaml_plugin_hello_world.Plugin_intf.S)
     let t_repr = "Ocaml_plugin_hello_world.Plugin_intf.S"
     let univ_constr = Ocaml_plugin_hello_world.Plugin_intf.univ_constr
@@ -21,10 +20,10 @@ module Plugin = Ocaml_dynloader.Make(struct
 
 let () =
   don't_wait_for (
-    Ocaml_plugin.Shell.set_defaults ~verbose:true ~echo:true ();
+    Ocaml_plugin.Private.Shell.set_defaults ~verbose:true ~echo:true ();
     let use_cache =
       if Array.length Sys.argv > 1 then
-        Some (Plugin_cache.Config.t_of_sexp (Sexp.of_string (Sys.argv.(1))))
+        Some (Ocaml_plugin.Plugin_cache.Config.t_of_sexp (Sexp.of_string (Sys.argv.(1))))
       else
         None
     in
@@ -33,7 +32,7 @@ let () =
         Some Sys.argv.(2)
       else None
     in
-    Ocaml_compiler.create
+    Ocaml_plugin.Compiler.create
       ?use_cache
       ?persistent_archive_dirpath
       () >>= function
@@ -42,13 +41,13 @@ let () =
       Core.Printf.eprintf "use run_standalone.exe (cf build.sh) instead\n%!";
       exit 1
     | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
-      let loader = Ocaml_compiler.loader ocaml_compiler in
+      let loader = Ocaml_plugin.Compiler.loader ocaml_compiler in
       let stdin = Lazy.force Reader.stdin in
       let rec loop () =
         Core.Printf.printf "enter ml filename(s) to load: %!";
         Reader.read_line stdin >>= function
         | `Eof ->
-          Ocaml_compiler.clean ocaml_compiler >>= fun result ->
+          Ocaml_plugin.Compiler.clean ocaml_compiler >>= fun result ->
           let () = Or_error.ok_exn result in
           print_newline ();
           return (shutdown 0)
@@ -84,7 +83,7 @@ let () =
             loop ()
           | [ "dep" ; file ] -> begin
               (* hack to play a bit with ocamldep *)
-              Ocaml_dynloader.find_dependencies loader file >>= function
+              Ocaml_plugin.Dynloader.find_dependencies loader file >>= function
               | Error err ->
                 Core.Printf.eprintf "ocamldep failed:\n%s\n%!" (Error.to_string_hum err);
                 loop ()

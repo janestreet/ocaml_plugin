@@ -13,8 +13,8 @@ module Repr = struct
     }
   ;;
   let side_effect =
-    { t           = "Ocaml_plugin.Ocaml_dynloader.Side_effect"
-    ; univ_constr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
+    { t           = "Ocaml_plugin.Dynloader.Side_effect"
+    ; univ_constr = "Ocaml_plugin.Dynloader.side_effect_univ_constr"
     }
   ;;
 end

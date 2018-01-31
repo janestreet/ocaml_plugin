@@ -267,7 +267,7 @@ let clean t =
 
 module Univ_constr = struct
   type 'a t = 'a Type_equal.Id.t
-  let name = "Ocaml_plugin.Std.Ocaml_dynloader.Univ_constr.t"
+  let name = "Ocaml_plugin.Dynloader.Univ_constr.t"
   let create () = Type_equal.Id.create ~name sexp_of_opaque
 end
 
@@ -416,7 +416,7 @@ end = struct
         Core.Printf.fprintf out_channel "end\n";
         Core.Printf.fprintf out_channel (
           "let () =\n" ^^
-          "  let module R = Ocaml_plugin.Ocaml_dynloader in\n" ^^
+          "  let module R = Ocaml_plugin.Dynloader in\n" ^^
           "  R.return_plugin %s (fun () ->\n" ^^
           "    let module M = F() in\n" ^^
           "    (module M.%s : %s))\n"
@@ -443,7 +443,7 @@ end = struct
      same name (several variations of config.ml for instance), what we do is give unique
      name to each cmxs that we produce: files in the cache have their uuid in the name,
      and files not in the cache are called $tmp_dir/something_$fresh.cmxs.
-     We can't have several Ocaml_dynloader.t use the same directory, because ocaml_plugin
+     We can't have several Ocaml_plugin.Dynloader.t use the same directory, because ocaml_plugin
      always create a fresh directory in which to put its files. *)
   let blocking_dynlink_exn ?(export=false) file =
     let loadfile = if export then Dynlink.loadfile else Dynlink.loadfile_private in
@@ -534,7 +534,7 @@ let find_dependencies t filename =
   else (
     (if Filename.check_suffix filename ".ml"
      then return (Ok ())
-     else return (Or_error.errorf "Ocaml_dynloader.find_dependencies: \
+     else return (Or_error.errorf "Ocaml_plugin.Dynloader.find_dependencies: \
                                    argument %S is not an ml file" filename)
     ) >>=? fun () ->
     Lazy_deferred.force_exn t.compilation_directory
@@ -744,9 +744,9 @@ let side_effect_univ_constr = Univ_constr.create ()
 
 module Side_effect_loader = Make(struct
     type t = (module Side_effect)
-    let t_repr = "Ocaml_plugin.Ocaml_dynloader.Side_effect"
+    let t_repr = "Ocaml_plugin.Dynloader.Side_effect"
     let univ_constr = side_effect_univ_constr
-    let univ_constr_repr = "Ocaml_plugin.Ocaml_dynloader.side_effect_univ_constr"
+    let univ_constr_repr = "Ocaml_plugin.Dynloader.side_effect_univ_constr"
   end)
 
 module Side_effect = struct
