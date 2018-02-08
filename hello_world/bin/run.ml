@@ -40,14 +40,14 @@ let () =
       Core.Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
       Core.Printf.eprintf "use run_standalone.exe (cf build.sh) instead\n%!";
       exit 1
-    | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
-      let loader = Ocaml_plugin.Compiler.loader ocaml_compiler in
+    | Ok (`this_needs_manual_cleaning_after compiler) ->
+      let loader = Ocaml_plugin.Compiler.loader compiler in
       let stdin = Lazy.force Reader.stdin in
       let rec loop () =
         Core.Printf.printf "enter ml filename(s) to load: %!";
         Reader.read_line stdin >>= function
         | `Eof ->
-          Ocaml_plugin.Compiler.clean ocaml_compiler >>= fun result ->
+          Ocaml_plugin.Compiler.clean compiler >>= fun result ->
           let () = Or_error.ok_exn result in
           print_newline ();
           return (shutdown 0)

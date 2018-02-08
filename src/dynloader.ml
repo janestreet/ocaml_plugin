@@ -443,8 +443,8 @@ end = struct
      same name (several variations of config.ml for instance), what we do is give unique
      name to each cmxs that we produce: files in the cache have their uuid in the name,
      and files not in the cache are called $tmp_dir/something_$fresh.cmxs.
-     We can't have several Ocaml_plugin.Dynloader.t use the same directory, because ocaml_plugin
-     always create a fresh directory in which to put its files. *)
+     We can't have several Ocaml_plugin.Dynloader.t use the same directory, because
+     ocaml_plugin always create a fresh directory in which to put its files. *)
   let blocking_dynlink_exn ?(export=false) file =
     let loadfile = if export then Dynlink.loadfile else Dynlink.loadfile_private in
     try

@@ -32,7 +32,7 @@ let univ_constr =
 run.ml:
 
 ```ocaml
-module Plugin = Ocaml_compiler.Make(struct
+module Plugin = Compiler.Make(struct
   type t = (module Plugin_intf.S)
   let t_repr = "Plugin_intf.S"
   let univ_constr = Plugin_intf.univ_constr

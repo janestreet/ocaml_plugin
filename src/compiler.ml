@@ -52,13 +52,13 @@ module Archive_lock = struct
 end
 
 type t =
-  { loader       : Ocaml_dynloader.t
+  { loader       : Dynloader.t
   ; archive_lock : Archive_lock.t ref
   }
 [@@deriving fields]
 
 let clean t =
-  Ocaml_dynloader.clean t.loader >>= fun r1 ->
+  Dynloader.clean t.loader >>= fun r1 ->
   (match t.archive_lock.contents with
    | Archive_lock.Cleaned -> Deferred.Or_error.ok_unit
    | Archive_lock.Cleaning def -> def
@@ -132,7 +132,7 @@ let save_archive_to destination =
 type 'a create_arguments = (
   ?persistent_archive_dirpath:string
   -> 'a
-) Ocaml_dynloader.create_arguments
+) Dynloader.create_arguments
 
 module Plugin_archive : sig
   val extract :
@@ -285,12 +285,12 @@ let create
     | Error _ as error -> error
     | Ok { ppx_is_embedded; archive_digests = _ } ->
       if ppx_is_embedded
-      then Ok (Ocaml_dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe })
-      else Ok Ocaml_dynloader.Preprocessor.No_preprocessing
+      then Ok (Dynloader.Preprocessor.Ppx { ppx_exe = in_compiler_dir ppx_exe })
+      else Ok Dynloader.Preprocessor.No_preprocessing
   in
   return preprocessor
   >>=? fun preprocessor ->
-  let compilation_config = { Ocaml_dynloader.Compilation_config.preprocessor } in
+  let compilation_config = { Dynloader.Compilation_config.preprocessor } in
   let initialize ~directory:build_dir =
     let persistent, compiler_dir =
       match persistent_archive_dirpath with
@@ -299,7 +299,7 @@ let create
     in
     Plugin_archive.extract ~archive_lock ~persistent compiler_dir
   in
-  Ocaml_dynloader.create
+  Dynloader.create
     ?in_dir
     ?in_dir_perm
     ?include_directories
@@ -454,7 +454,7 @@ When it is deemed safe to execute the toplevel of a plugin, one can supply the s
          (if use_ocamldep
           then
             (match plugin_filenames with
-             | [ main ] -> Ocaml_dynloader.find_dependencies loader main
+             | [ main ] -> Dynloader.find_dependencies loader main
              | [] | _ :: _ :: _ ->
                return
                  (Or_error.error "Give only the main file when using option -ocamldep"
@@ -497,11 +497,11 @@ module type S = sig
 
   val check_plugin_cmd : unit -> Command.t
 
-  module Load : Ocaml_dynloader.S with type t := t
+  module Load : Dynloader.S with type t := t
 end
 
-module Make (X:Ocaml_dynloader.Module_type) = struct
-  module Load = Ocaml_dynloader.Make(X)
+module Make (X:Dynloader.Module_type) = struct
+  module Load = Dynloader.Make(X)
   let load_ocaml_src_files  = make_load_ocaml_src_files Load.load_ocaml_src_files
   let load_ocaml_src_files_without_running_them =
     make_load_ocaml_src_files Load.load_ocaml_src_files_without_running_them
@@ -516,7 +516,7 @@ module Make (X:Ocaml_dynloader.Module_type) = struct
 end
 
 module Side_effect = struct
-  module Load = Ocaml_dynloader.Side_effect
+  module Load = Dynloader.Side_effect
   let load_ocaml_src_files = make_load_ocaml_src_files Load.load_ocaml_src_files
   let load_ocaml_src_files_without_running_them =
     make_load_ocaml_src_files Load.load_ocaml_src_files_without_running_them

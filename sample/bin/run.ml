@@ -275,10 +275,10 @@ let main () () =
       | Error e ->
         Core.Printf.eprintf "Cannot build embed loader: %s" (Error.to_string_hum e);
         exit 1
-      | Ok (`this_needs_manual_cleaning_after ocaml_compiler) ->
+      | Ok (`this_needs_manual_cleaning_after compiler) ->
         return
-          ((fun () -> Ocaml_plugin.Compiler.clean ocaml_compiler),
-           Ocaml_plugin.Compiler.loader ocaml_compiler)
+          ((fun () -> Ocaml_plugin.Compiler.clean compiler),
+           Ocaml_plugin.Compiler.loader compiler)
     else
       Ocaml_plugin.Dynloader.create
         ?in_dir:compilation_directory
