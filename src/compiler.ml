@@ -28,19 +28,19 @@ end
 
 (* Map of the directories contents:
    - build_dir: /tmp/ocaml_plugin_XXXXX/{m_dyn_1_.ml,m_dyn_1_.o,m_dyn_1_.cmx,m_dyn_1_.cmxs,...}
-   Deleted on clean up.
+     Deleted on clean up.
 
    - compiler_dir:
-   Either /tmp/ocaml_plugin_XXXXX/{ocamlopt.opt,pervasives.cmi,pa_sexp_conv.cmo,...}
-   or $user_specified_dir/compiler/{archive-info.sexp,the other files}.
-   Locked if it is shared using $user_specified_dir/compiler.lock. Deleted on clean up
-   if they are the same directory otherwise deleted when the digest of the archive
-   doesn't match the info anymore.
+     Either /tmp/ocaml_plugin_XXXXX/{ocamlopt.opt,pervasives.cmi,pa_sexp_conv.cmo,...}
+     or $user_specified_dir/compiler/{archive-info.sexp,the other files}.
+     Locked if it is shared using $user_specified_dir/compiler.lock. Deleted on clean up
+     if they are the same directory otherwise deleted when the digest of the archive
+     doesn't match the info anymore.
 
    - cache dir:
-   $user_specified_dir/cmxs-cache/{cache-info.sexp, abcd-efgh-ijkl-mnop.cmxs}
-   copied there from build_dir
-   Locked because it can be shared using $user_specified_dir/cmxs-cache.lock.
+     $user_specified_dir/cmxs-cache/{cache-info.sexp, abcd-efgh-ijkl-mnop.cmxs}
+     copied there from build_dir
+     Locked because it can be shared using $user_specified_dir/cmxs-cache.lock.
 
    Both locks are released on clean up. *)
 
