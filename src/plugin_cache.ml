@@ -344,7 +344,7 @@ module State = struct
         Hashtbl.fold table ~init ~f:(fun ~key:_ ~data acc -> f acc data)
       in
       Container.min_elt ~fold:fold_data t.table
-        ~cmp:(priority_heuristic_to_clean_plugins t)
+        ~compare:(priority_heuristic_to_clean_plugins t)
     in
     let max_plugins = max 0 t.config.max_files in
     let rec loop acc =
@@ -394,7 +394,7 @@ module State = struct
          deserialize the info, [creation_num] fields are assigned in the same order then
          before serialization. *)
       Hashtbl.data t.table
-      |> List.sort ~cmp:Plugin_in_table.older_first
+      |> List.sort ~compare:Plugin_in_table.older_first
       |> List.map ~f:Plugin_in_table.plugin
     in
     Info.create ~plugins ()

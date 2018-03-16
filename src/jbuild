@@ -4,7 +4,7 @@
   (flags (:standard -safe-string))
   (libraries (async core dynlink sexplib))
   (c_names (ocaml_fake_archive))
-  (preprocess (pps (ppx_jane ppx_driver.runner)))))
+  (preprocess (pps (ppx_jane ppxlib.runner)))))
 
 
 (jbuild_version 1)

@@ -14,7 +14,7 @@ This tool archives ocamlopt, cmis and preprocessors in a c file containing a big
 ;;
 
 let check_files_in_tar ~files_in_tar ~expected =
-  let files_in_tar = List.sort ~cmp:String.compare files_in_tar in
+  let files_in_tar = List.sort ~compare:String.compare files_in_tar in
   let files_in_tar_set = String.Set.of_list files_in_tar in
   if not (Set.equal files_in_tar_set expected)
   || List.length files_in_tar <> Set.length files_in_tar_set
