@@ -1,4 +1,4 @@
-## git version
+## v0.11
 
 - Rework the API of Ocaml_plugin to use the new stdless idiom. (Keep the old one
   as deprecated)
