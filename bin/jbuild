@@ -1,6 +1,5 @@
 (executables
  ((names (ocaml_embed_compiler))
-  (flags (:standard -safe-string))
   (libraries
    (async
     core

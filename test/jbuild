@@ -2,7 +2,6 @@
 (executables
  ((names (plugin_loader))
   (modules (plugin_loader))
-  (flags (:standard -safe-string))
   (libraries
    (async
     core
