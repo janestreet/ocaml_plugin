@@ -11,6 +11,7 @@ build: [
 depends: [
   "async"
   "core"
+  "core_kernel"
   "ppx_jane"
   "sexplib"
   "jbuilder"                {build & >= "1.0+beta18.1"}
