@@ -5,7 +5,7 @@
               core
               dynlink
               sexplib
-              core_kernel.uuid))
+              core.uuid))
   (c_names (ocaml_fake_archive))
   (preprocess (pps (ppx_jane ppxlib.runner)))))
 
