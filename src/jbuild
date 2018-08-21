@@ -4,6 +4,7 @@
   (libraries (async
               core
               dynlink
+              async.lock_file_async
               sexplib
               core.uuid))
   (c_names (ocaml_fake_archive))

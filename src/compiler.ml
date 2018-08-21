@@ -63,7 +63,7 @@ let clean t =
    | Archive_lock.Cleaned -> Deferred.Or_error.ok_unit
    | Archive_lock.Cleaning def -> def
    | Archive_lock.Locked lock_filename ->
-     let clean = Lock_file.Nfs.unlock lock_filename in
+     let clean = Lock_file_async.Nfs.unlock lock_filename in
      t.archive_lock.contents <- Archive_lock.Cleaning clean;
      clean >>| fun res ->
      t.archive_lock.contents <- Archive_lock.Cleaned;
@@ -222,7 +222,7 @@ end = struct
         let lock_filename = compiler_dir ^ ".lock" in
         Monitor.try_with_or_error (fun () ->
           Unix.mkdir ~p:() ~perm:0o755 (Filename.dirname lock_filename)) >>=? fun () ->
-        Lock_file.Nfs.create lock_filename >>=? fun () ->
+        Lock_file_async.Nfs.create lock_filename >>=? fun () ->
         archive_lock := Archive_lock.Locked lock_filename;
         Shell.rm ~r:() ~f:() [ compiler_dir ] >>=? fun () ->
         Monitor.try_with_or_error (fun () ->

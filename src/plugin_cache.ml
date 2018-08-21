@@ -415,7 +415,7 @@ module State = struct
     if t.has_write_lock then Deferred.Or_error.return ()
     else
       let lock_filename = lock_filename t in
-      Lock_file.Nfs.create lock_filename >>|? fun () ->
+      Lock_file_async.Nfs.create lock_filename >>|? fun () ->
       t.has_write_lock <- true;
   ;;
 
@@ -543,7 +543,7 @@ module State = struct
   let clean t =
     let had_lock = t.has_write_lock in
     t.has_write_lock <- false;
-    if_ had_lock (fun () -> Lock_file.Nfs.unlock (lock_filename t))
+    if_ had_lock (fun () -> Lock_file_async.Nfs.unlock (lock_filename t))
   ;;
 end
 
