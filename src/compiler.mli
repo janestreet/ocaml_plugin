@@ -28,6 +28,9 @@ module Archive_metadata : sig
   [@@deriving sexp_of]
 end
 
+(** List of files in the archive embedded into the current executable. *)
+val embedded_files : unit -> Plugin_cache.Digest.t String.Map.t Or_error.t
+
 type 'a create_arguments = (
   ?persistent_archive_dirpath:string
   (** Keep the extracted archive in some persistent location to avoid paying the cost of

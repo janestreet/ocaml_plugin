@@ -102,6 +102,10 @@ involving [ocaml_embed_compiler]."
     else Ok (Sexp.of_string_conv_exn str [%of_sexp: Archive_metadata.t]))
 ;;
 
+let embedded_files () =
+  Or_error.map (force archive_metadata) ~f:(fun m -> m.archive_digests)
+;;
+
 let () =
   match Core.Sys.getenv "OCAML_PLUGIN_DUMP_ARCHIVE" with
   | None -> ()
