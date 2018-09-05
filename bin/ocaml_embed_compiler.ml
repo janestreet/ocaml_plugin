@@ -99,19 +99,19 @@ let command =
   Command.async ~readme ~summary:"tool to embed ocamlopt and cmi files into a c file"
     (let open Command.Let_syntax in
      let%map_open ocamlopt_opt =
-       flag "-cc" (required file)
+       flag "-cc" (required Filename.arg_type)
          ~doc:"</path/to/ocamlopt.opt> set the ocaml native compiler"
      and ppx_exe =
-       flag "-ppx" (optional file)
+       flag "-ppx" (optional Filename.arg_type)
          ~doc:"</path/to/ppx.exe> set the executable for ppx preprocessing"
      and ocamldep_opt =
-       flag "-ocamldep" (optional file)
+       flag "-ocamldep" (optional Filename.arg_type)
          ~doc:"</path/to/ocamldep.opt> set the ocamldep native dependency generator"
      and target =
-       flag "-o" (required file)
+       flag "-o" (required Filename.arg_type)
          ~doc:"<file.c> set the name of the c file to be created"
      and verbose = flag "-verbose" no_arg ~doc:" be more verbose"
-     and extra_files = anon (sequence ("<embedded-file>" %: file))
+     and extra_files = anon (sequence ("<embedded-file>" %: Filename.arg_type))
      in
      fun () ->
        let open! Deferred.Let_syntax in

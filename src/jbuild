@@ -7,8 +7,8 @@
               async.lock_file_async
               sexplib
               core.uuid))
-  (preprocess (pps (ppx_jane -dont-check-doc-comments-attachment ppxlib.runner)))
-  (c_names (ocaml_fake_archive))))
+  (c_names (ocaml_fake_archive))
+  (preprocess (pps (ppx_jane ppxlib.runner)))))
 
 
 (jbuild_version 1)
