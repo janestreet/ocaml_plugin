@@ -16,7 +16,7 @@ ocaml_plugin can be installed via [opam](http://opam.ocamlpro.com/):
 Usage
 -----
 
-A simple example is provided under the [hello_world]() directory. A
+A simple example is provided under the `hello_world` directory. A
 recommended set-up usually involves 2 steps in the code
 - defining the interface of the plugin, as well as an univ value
 - applying a functor to get a customized plugin loader plugin_intf.ml:
