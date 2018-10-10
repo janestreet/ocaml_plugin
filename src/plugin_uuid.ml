@@ -84,7 +84,7 @@ let t_of_sexp sexp =
 let sexp_of_t t = Versioned.sexp_of_t (Versioned.of_current t)
 
 let create ~repr ~ml_bundles () =
-  { uuid = Uuid.create ()
+  { uuid = Uuid_unix.create ()
   ; ml_bundles
   ; repr
   }
