@@ -1,0 +1,3 @@
+(executables (names run)
+ (libraries async core ocaml_plugin ocaml_plugin_hello_world sexplib)
+ (modules run) (preprocess (pps ppx_jane)))

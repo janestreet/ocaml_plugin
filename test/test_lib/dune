@@ -1,0 +1,2 @@
+(library (name ocaml_plugin_user_with_unit_tests)
+ (libraries core ocaml_plugin) (preprocess (pps ppx_jane)))

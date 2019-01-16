@@ -1,7 +1,0 @@
-(library
- ((name ocaml_plugin_hello_world)
-  (libraries (core ocaml_plugin sexplib))
-  (preprocess (pps (ppx_jane ppxlib.runner)))))
-
-
-(jbuild_version 1)

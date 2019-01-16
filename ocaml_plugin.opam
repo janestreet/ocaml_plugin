@@ -1,23 +1,22 @@
-opam-version: "1.2"
+opam-version: "2.0"
 maintainer: "opensource@janestreet.com"
 authors: ["Jane Street Group, LLC <opensource@janestreet.com>"]
 homepage: "https://github.com/janestreet/ocaml_plugin"
 bug-reports: "https://github.com/janestreet/ocaml_plugin/issues"
 dev-repo: "git+https://github.com/janestreet/ocaml_plugin.git"
+doc: "https://ocaml.janestreet.com/ocaml-core/latest/doc/ocaml_plugin/index.html"
 license: "MIT"
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
+  "ocaml" {>= "4.07.0"}
   "async"
   "core"
   "ppx_jane"
   "sexplib"
-  "jbuilder"                {build & >= "1.0+beta18.1"}
-  "ocaml-migrate-parsetree" {>= "1.0"}
-  "ppxlib"                  {>= "0.1.0"}
+  "dune"     {build & >= "1.5.1"}
 ]
-available: [ ocaml-version >= "4.06.1" ]
-descr: "
-Automatically build and dynlink OCaml source files
+synopsis: "Automatically build and dynlink OCaml source files"
+description: "
 "

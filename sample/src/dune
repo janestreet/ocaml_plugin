@@ -1,0 +1,2 @@
+(library (name ocaml_plugin_sample) (libraries core ocaml_plugin sexplib)
+ (preprocess (pps ppx_jane)))
