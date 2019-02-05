@@ -153,7 +153,7 @@ end = struct
       }
     [@@deriving sexp]
 
-    let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+    let t_of_sexp = Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
 
     let info_file_name = "archive-info.sexp"
     let info_file dir = dir ^/ info_file_name

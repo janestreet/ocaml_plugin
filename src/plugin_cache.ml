@@ -20,7 +20,7 @@ module Stable = struct
                                           [@default try_old_cache_with_new_exec_default]
         }
       [@@deriving fields, sexp, bin_io, compare]
-      let t_of_sexp = Core.Sexp.of_sexp_allow_extra_fields t_of_sexp
+      let t_of_sexp = Core.Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
       let of_prev (v1 : V1.t) =
         { dir = v1.dir
         ; max_files = Core.Option.value v1.max_files ~default:10
@@ -100,7 +100,7 @@ module Plugin = struct
     }
   [@@deriving fields, sexp]
 
-  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
 
   let clean t =
     Shell.rm ~f:() [ t.cmxs_filename ]
@@ -198,7 +198,7 @@ end = struct
     }
   [@@deriving sexp, fields]
 
-  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
 
   let create ~plugins () =
     { version    = sexp_of_string Params.version

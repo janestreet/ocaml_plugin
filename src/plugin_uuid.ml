@@ -37,7 +37,7 @@ module V2 = struct
     }
   [@@deriving sexp, fields]
 
-  let t_of_sexp = Sexp.of_sexp_allow_extra_fields t_of_sexp
+  let t_of_sexp = Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
 
   let of_prev prev =
     let { Prev.
