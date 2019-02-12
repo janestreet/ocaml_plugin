@@ -19,8 +19,7 @@ module Stable = struct
         ; try_old_cache_with_new_exec : bool
                                           [@default try_old_cache_with_new_exec_default]
         }
-      [@@deriving fields, sexp, bin_io, compare]
-      let t_of_sexp = Core.Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
+      [@@deriving fields, sexp, bin_io, compare] [@@sexp.allow_extra_fields]
       let of_prev (v1 : V1.t) =
         { dir = v1.dir
         ; max_files = Core.Option.value v1.max_files ~default:10

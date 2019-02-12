@@ -6,9 +6,7 @@ type t =
   ; mli         : string option
   ; module_name : string
   }
-[@@deriving sexp, compare]
-
-let t_of_sexp = Sexp.of_sexp_allow_extra_fields_recursively t_of_sexp
+[@@deriving sexp, compare] [@@sexp.allow_extra_fields]
 
 type tmp_t =
   { mutable tmp_ml  : string option
