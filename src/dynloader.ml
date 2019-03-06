@@ -769,7 +769,7 @@ module Side_effect = struct
       Expert.compile_ocaml_src_files_into_cmxs_file
     let blocking_load_cmxs_file filename =
       Expert.blocking_load_cmxs_file filename
-      |> (Or_error.ignore : (module Side_effect) Or_error.t -> unit Or_error.t)
+      |> (Or_error.ignore_m : (module Side_effect) Or_error.t -> unit Or_error.t)
     ;;
     let load_cmxs_file filename =
       Expert.load_cmxs_file filename
