@@ -1,3 +1,4 @@
 (library (name ocaml_plugin) (public_name ocaml_plugin)
- (libraries async core dynlink async.lock_file_async sexplib core.uuid)
+ (libraries async core dynlink async.lock_file_async core_kernel.uuid
+  core.uuid)
  (c_names ocaml_fake_archive) (preprocess (pps ppx_jane)))

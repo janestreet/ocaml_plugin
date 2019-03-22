@@ -1,2 +1,2 @@
-(library (name ocaml_plugin_hello_world)
- (libraries core ocaml_plugin sexplib) (preprocess (pps ppx_jane)))
+(library (name ocaml_plugin_hello_world) (libraries ocaml_plugin)
+ (preprocess (pps ppx_jane)))

@@ -13,9 +13,10 @@ depends: [
   "ocaml" {>= "4.07.0"}
   "async"
   "core"
+  "core_kernel"
   "ppx_jane"
   "sexplib"
-  "dune"     {build & >= "1.5.1"}
+  "dune"        {build & >= "1.5.1"}
 ]
 synopsis: "Automatically build and dynlink OCaml source files"
 description: "
