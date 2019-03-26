@@ -6,7 +6,7 @@ module Stable = struct
     module V1 = struct
       type t =
         { dir       : string
-        ; max_files : int sexp_option
+        ; max_files : int option [@sexp.option]
         ; readonly  : bool
         }
       [@@deriving fields, sexp, bin_io, compare]
