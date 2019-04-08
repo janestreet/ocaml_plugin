@@ -9,6 +9,7 @@
 *)
 
 open Core
+open Poly
 open Async
 
 module Plugin = Ocaml_plugin.Dynloader.Make(struct
