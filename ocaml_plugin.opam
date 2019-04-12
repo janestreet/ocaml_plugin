@@ -15,6 +15,7 @@ depends: [
   "core"
   "core_kernel"
   "ppx_jane"
+  "ppx_optcomp"
   "sexplib"
   "dune"        {build & >= "1.5.1"}
 ]

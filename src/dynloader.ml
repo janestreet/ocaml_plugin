@@ -1,7 +1,11 @@
 open Core
 open Async
 
+[%%if ocaml_version >= (4, 08, 0)]
+let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 60; 66]
+[%%else]
 let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 60]
+[%%endif]
 ;;
 
 (* The default policy about warnings *)
@@ -451,6 +455,9 @@ end = struct
       loadfile file;
       raise_s [%sexp "Ocaml_plugin: Plugin_did_not_return"]
     with
+    | (Dynlink.Error (Library's_module_initializers_failed (Return_plugin packed_plugin)))
+        [@if ocaml_version >= (4, 08, 0)] ->
+      packed_plugin
     | Return_plugin packed_plugin -> packed_plugin
     | Dynlink.Error e ->
       raise_s [%sexp "Ocaml_plugin: Dynlink_error", (Dynlink.error_message e : string)]
