@@ -1,5 +1,4 @@
 open Core
-open Poly
 open Async
 
 (*
@@ -125,7 +124,7 @@ struct
 
   let rev_append_flags rev_acc flags =
     let flags = String.split ~on:' ' flags in
-    let fold acc flag = if flag = "" then acc else flag :: acc in
+    let fold acc flag = if String.is_empty flag then acc else flag :: acc in
     rev_acc := List.fold ~f:fold ~init:!rev_acc flags
   ;;
 

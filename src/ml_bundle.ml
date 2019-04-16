@@ -1,5 +1,4 @@
 open Core
-open Poly
 open Async
 
 type t =
@@ -16,7 +15,7 @@ type tmp_t =
   }
 
 let valid_module_name s =
-  s <> "" &&
+  not (String.is_empty s) &&
   match s.[0] with
   | 'A'..'Z' ->
     String.for_all s ~f:(function

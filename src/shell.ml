@@ -1,5 +1,4 @@
 open Core
-open Poly
 open Async
 
 let permission_exe = 0o700
@@ -38,7 +37,7 @@ end
 let flags = Process_flag.all
 ;;
 
-let endline std = if std = "" then std else std ^ "\n"
+let endline std = if String.is_empty std then std else std ^ "\n"
 ;;
 
 let make_run from_output ?working_dir ?env ?(quiet_or_error = false) prog args =
@@ -56,7 +55,7 @@ let make_run from_output ?working_dir ?env ?(quiet_or_error = false) prog args =
     match exit_status with
     | Error status -> Error (Some status)
     | Ok () ->
-      if quiet_or_error && (stdout <> "" || stderr <> "")
+      if quiet_or_error && (not (String.is_empty stdout) || not (String.is_empty stderr))
       then Error None
       else Ok ()
   in
@@ -89,7 +88,7 @@ let make_run from_output ?working_dir ?env ?(quiet_or_error = false) prog args =
         status
         (force command_text)
         stdout
-        (if stdout = "" then stderr else "\n"^stderr)
+        (if String.is_empty stdout then stderr else "\n"^stderr)
     ))
     in
     Error error
@@ -102,7 +101,7 @@ let run_lines =
   make_run ~quiet_or_error:false
     (function { Process.Output.stdout ; _ } ->
        List.filter_map (String.split ~on:'\n' stdout)
-         ~f:(fun s -> let s = String.rstrip s in if s = "" then None else Some s))
+         ~f:(fun s -> let s = String.rstrip s in if String.is_empty s then None else Some s))
 ;;
 
 let getcwd () =

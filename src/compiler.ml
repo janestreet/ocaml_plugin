@@ -1,5 +1,4 @@
 open Core
-open Poly
 open Async
 open Import
 
@@ -84,7 +83,7 @@ let archive () =
   let bstr = archive () in
   let dummy = "dummy" in
   if Bigstring.length bstr = String.length dummy &&
-     Bigstring.to_string bstr = dummy then
+     String.equal (Bigstring.to_string bstr) dummy then
     None
   else
     Some bstr

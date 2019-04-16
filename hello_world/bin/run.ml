@@ -9,7 +9,6 @@
 *)
 
 open Core
-open Poly
 open Async
 
 module Plugin = Ocaml_plugin.Dynloader.Make(struct
@@ -55,7 +54,7 @@ let () =
         | `Ok input ->
           let files = String.split ~on:' ' input in
           let files = List.filter_map files
-                        ~f:(fun s -> let s = String.strip s in if s = "" then None else Some s)
+                        ~f:(fun s -> let s = String.strip s in if String.is_empty s then None else Some s)
           in
           let with_files files =
             Plugin.load_ocaml_src_files loader files >>= function
