@@ -456,7 +456,7 @@ end = struct
       raise_s [%sexp "Ocaml_plugin: Plugin_did_not_return"]
     with
     | (Dynlink.Error (Library's_module_initializers_failed (Return_plugin packed_plugin)))
-        [@if ocaml_version >= (4, 08, 0)] ->
+      [@if ocaml_version >= (4, 08, 0)] ->
       packed_plugin
     | Return_plugin packed_plugin -> packed_plugin
     | Dynlink.Error e ->

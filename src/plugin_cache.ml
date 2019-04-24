@@ -17,7 +17,7 @@ module Stable = struct
         ; max_files : int [@default 10]
         ; readonly  : bool [@default false]
         ; try_old_cache_with_new_exec : bool
-                                          [@default try_old_cache_with_new_exec_default]
+                                        [@default try_old_cache_with_new_exec_default]
         }
       [@@deriving fields, sexp, bin_io, compare] [@@sexp.allow_extra_fields]
       let of_prev (v1 : V1.t) =
