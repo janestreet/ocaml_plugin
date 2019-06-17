@@ -1,5 +1,5 @@
 module Stable = struct
-  open Core.Core_stable
+  open! Core.Core_stable
 
   module Config = struct
     let try_old_cache_with_new_exec_default = false
@@ -31,9 +31,9 @@ module Stable = struct
   end
 end
 
-open Core
-open Async
-open Import
+open! Core
+open! Async
+open! Import
 
 module Build_info : sig
   type t [@@deriving sexp]

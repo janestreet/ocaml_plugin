@@ -1,5 +1,5 @@
-open Core
-open Async
+open! Core
+open! Async
 
 (*
    For that sample, we will assume that the command ocamlopt.opt

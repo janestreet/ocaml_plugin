@@ -1,4 +1,4 @@
-open Core
+open! Core
 
 type t1 = string
 let make_v1 s = s

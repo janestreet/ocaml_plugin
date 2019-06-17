@@ -8,8 +8,8 @@
    enter ml filename(s) to load: plugin_001.ml
 *)
 
-open Core
-open Async
+open! Core
+open! Async
 
 module Plugin = Ocaml_plugin.Dynloader.Make(struct
     type t = (module Ocaml_plugin_hello_world.Plugin_intf.S)

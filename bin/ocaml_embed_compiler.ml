@@ -1,5 +1,5 @@
-open Core
-open Async
+open! Core
+open! Async
 
 let (>>=!) a fct = a >>= fun result -> fct (Or_error.ok_exn result)
 let (>>|!) a fct = a >>| fun result -> fct (Or_error.ok_exn result)

@@ -1,5 +1,5 @@
-open Core
-open Async
+open! Core
+open! Async
 
 let fold_result ~f ~init:acc =
   let rec aux acc = function

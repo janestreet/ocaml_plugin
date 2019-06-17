@@ -1,5 +1,5 @@
-open Core
-open Async
+open! Core
+open! Async
 
 let permission_exe = 0o700
 ;;

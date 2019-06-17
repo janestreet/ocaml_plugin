@@ -1,6 +1,6 @@
-open Core
-open Async
-open Import
+open! Core
+open! Async
+open! Import
 
 let tar_id = "dynlink.tgz"
 ;;

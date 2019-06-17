@@ -1,5 +1,5 @@
 open! Core
-open Async
+open! Async
 
 (* some shared internal util for ocaml_plugin *)
 
