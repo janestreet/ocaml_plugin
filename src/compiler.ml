@@ -211,7 +211,7 @@ end = struct
               (String.Set.of_list (Array.to_list files))
               (String.Set.of_list [ info_file_name; tar_id ])
           in
-          let files_we_would_extract = Set.of_map_keys digests in
+          let files_we_would_extract = Map.key_set digests in
           String.Set.equal files_extracted files_we_would_extract)
         else return (Ok false)
     ;;

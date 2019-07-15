@@ -18,7 +18,7 @@ Loading mli without ml
 Loading ml without mli
 
   $ rm -f *.ml*
-  $ echo 'print_endline "loaded"' > test.ml
+  $ echo 'let () = print_endline "loaded"' > test.ml
   $ $TEST_DIR/plugin_loader.exe ./test.ml
   loaded
 
@@ -26,7 +26,7 @@ Loading ml with mli by mentioning the ml/mli/ml without extension
 
   $ rm -f *.ml*
   $ touch test.mli
-  $ echo 'print_endline "loaded"' > test.ml
+  $ echo 'let () = print_endline "loaded"' > test.ml
   $ $TEST_DIR/plugin_loader.exe ./test.mli
   loaded
   $ $TEST_DIR/plugin_loader.exe ./test.ml
@@ -45,7 +45,7 @@ Loading ml with mli by mentioning the wrong mli
 Loading the same file several times
 
   $ rm -f *.ml*
-  $ echo 'print_endline "loaded"' > test.ml
+  $ echo 'let () = print_endline "loaded"' > test.ml
   $ $TEST_DIR/plugin_loader.exe 'test.ml | test.ml | test.ml'
   loaded
   loaded
@@ -67,6 +67,6 @@ Loading several ml files
   $ echo '#!/usr/bin/env ocaml' > test2.ml
   $ echo 'let x = "first"' >> test2.ml
   $ echo '#!/usr/bin/env ocaml' > test3.ml
-  $ echo 'let x = Test1.x ^ "-last";; print_endline x' >> test3.ml
+  $ echo 'let x = Test1.x ^ "-last";; let () = print_endline x' >> test3.ml
   $ $TEST_DIR/plugin_loader.exe test2.ml test1.ml test3.ml
   first-middle-last
