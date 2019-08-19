@@ -98,7 +98,7 @@ end = struct
         let pid = Unix.getpid () in
         let build_info = Params.build_info_as_sexp in
         let version = Params.version in
-        let sys_argv = Sys.argv in
+        let sys_argv = Sys.get_argv () in
         Unix.getlogin () >>| fun login ->
         let t =
           { login

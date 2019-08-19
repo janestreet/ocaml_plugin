@@ -166,7 +166,7 @@ end = struct
         [ "version"  , sexp_of_string Params.version
         ; "login"    , sexp_of_string login
         ; "hostname" , sexp_of_string (Unix.gethostname ())
-        ; "sys_argv" , [%sexp_of: string array] Sys.argv
+        ; "sys_argv" , [%sexp_of: string array] (Sys.get_argv ())
         ]
       ) >>|? fun infos ->
       let build_info = Params.build_info_as_sexp in

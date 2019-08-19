@@ -21,15 +21,16 @@ module Plugin = Ocaml_plugin.Dynloader.Make(struct
 let () =
   don't_wait_for (
     Ocaml_plugin.Private.Shell.set_defaults ~verbose:true ~echo:true ();
+    let argv = Sys.get_argv () in
     let use_cache =
-      if Array.length Sys.argv > 1 then
-        Some (Ocaml_plugin.Plugin_cache.Config.t_of_sexp (Sexp.of_string (Sys.argv.(1))))
+      if Array.length argv > 1 then
+        Some (Ocaml_plugin.Plugin_cache.Config.t_of_sexp (Sexp.of_string (argv.(1))))
       else
         None
     in
     let persistent_archive_dirpath =
-      if Array.length Sys.argv > 2 then
-        Some Sys.argv.(2)
+      if Array.length argv > 2 then
+        Some argv.(2)
       else None
     in
     Ocaml_plugin.Compiler.create
