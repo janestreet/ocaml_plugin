@@ -17,7 +17,7 @@ depends: [
   "ppx_jane"
   "ppx_optcomp"
   "sexplib"
-  "dune"        {>= "1.5.1"}
+  "dune"        {>= "2.0.0"}
 ]
 synopsis: "Automatically build and dynlink OCaml source files"
 description: "
