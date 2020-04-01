@@ -124,8 +124,8 @@ let command =
          match Hashtbl.add embedded_files ~key:basename ~data:filename with
          | `Ok -> ()
          | `Duplicate ->
-           failwiths ~here:[%here] "cannot embed multiple files with the same basename"
-             basename [%sexp_of: string]
+           raise_s [%sexp "cannot embed multiple files with the same basename"
+                        , (basename : string)]
        in
        let cp ~filename ~basename =
          embed_file ~filename ~basename;

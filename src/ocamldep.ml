@@ -110,9 +110,10 @@ let%test_module _ =
       let visited = String.Hash_set.create () in
       let visit_trace s =
         if Hash_set.mem visited s then
-          failwiths ~here:[%here] "complexity violation in toposort, node visited more that once"
-            (s, graph)
-            [%sexp_of: string * String.Set.t String.Map.t]
+          raise_s [%sexp
+            "complexity violation in toposort, node visited more that once"
+          , (s : string)
+          , (graph : String.Set.t String.Map.t)]
         else
           Hash_set.add visited s
       in
