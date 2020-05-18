@@ -120,7 +120,7 @@ let () =
          archive_metadata);
     (match archive () with
      | None -> Core.Printf.printf "No archive\n%!"
-     | Some bstr -> Bigstring.really_output stdout bstr; Out_channel.flush stdout);
+     | Some bstr -> Bigstring_unix.really_output stdout bstr; Out_channel.flush stdout);
     Core.Caml.exit 0
 ;;
 
