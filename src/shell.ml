@@ -105,11 +105,11 @@ let run_lines =
 ;;
 
 let getcwd () =
-  Deferred.Or_error.try_with ~name:"Ocaml_plugin.Shell.getcwd" Sys.getcwd
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~name:"Ocaml_plugin.Shell.getcwd" Sys.getcwd
 ;;
 
 let chmod pathname ~perm =
-  Deferred.Or_error.try_with ~extract_exn:true (fun () -> Unix.chmod pathname ~perm)
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () -> Unix.chmod pathname ~perm)
 ;;
 
 let raw_temp_dir ~in_dir ?(prefix="ocaml_plugin_") ?(suffix=".build")
@@ -121,7 +121,7 @@ let raw_temp_dir ~in_dir ?(prefix="ocaml_plugin_") ?(suffix=".build")
       prefix
       suffix
   in
-  Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
     Unix.mkdir ~p:() ~perm in_dir >>= fun () ->
     In_thread.run fct)
 ;;
@@ -180,7 +180,7 @@ let cp ~source ~dest =
 ;;
 
 let readdir dir =
-  Deferred.Or_error.try_with (fun () ->
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  (fun () ->
     Sys.readdir dir
   )
 ;;

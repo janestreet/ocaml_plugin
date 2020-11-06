@@ -67,7 +67,7 @@ end = struct
 
   let file arg =
     let fct () = to_hex Md5.digest_file_blocking arg in
-    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+    Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () -> In_thread.run fct)
   ;;
 
   let string arg = to_hex Md5.digest_string arg
@@ -221,7 +221,7 @@ end = struct
   ;;
 
   let save ~dir t =
-    Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+    Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
       Writer.save_sexp ~perm:cache_files_perm (info_file_pathname ~dir) (sexp_of_t t)
     )
   ;;
@@ -231,7 +231,7 @@ end = struct
     (* do no check for `Read there, let the reader fail in that case *)
     Unix.access pathname [ `Exists ] >>= function
     | Ok () -> begin
-        Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+        Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
           Reader.load_sexp_exn pathname t_of_sexp
         )
       end
@@ -423,7 +423,7 @@ module State = struct
     let reset_cache_if_writable info =
       if_ (not (Config.readonly t.config)) (fun () ->
         let dir = Config.dir t.config ^/ Info.cache_dir in
-        Monitor.try_with_or_error (fun () ->
+        Monitor.try_with_or_error ~rest:(`Log)  (fun () ->
           Unix.mkdir ~p:() ~perm:Info.cache_dir_perm dir) >>=? fun () ->
         take_write_lock t >>=? fun () ->
         Info.save ~dir:config_dir Info.empty >>=? fun () ->
@@ -519,7 +519,7 @@ module State = struct
   let add t sources plugin_uuid filename =
     if_ (not (Config.readonly t.config)) (fun () ->
       let dir = Config.dir t.config ^/ Info.cache_dir in
-      Monitor.try_with_or_error (fun () ->
+      Monitor.try_with_or_error ~rest:(`Log)  (fun () ->
         Unix.mkdir ~p:() ~perm:Info.cache_dir_perm dir) >>=? fun () ->
       take_write_lock t >>=? fun () ->
       let uuid = Plugin_uuid.uuid plugin_uuid in

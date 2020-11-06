@@ -97,7 +97,7 @@ let ml_with_mli_reorder filenames =
 ;;
 
 let from_filenames filenames =
-  Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
     let pairs = ml_with_mli_reorder filenames in
     Deferred.List.map pairs ~f:enrich_bundle
   )

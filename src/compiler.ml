@@ -125,7 +125,7 @@ let () =
 ;;
 
 let save_archive_to destination =
-  Deferred.Or_error.try_with (fun () ->
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  (fun () ->
     match archive () with
     | None -> failwith "There is no embedded compiler in the current executable"
     | Some contents -> Writer.with_file_atomic destination ~f:(fun w ->
@@ -161,7 +161,7 @@ end = struct
 
     let create () =
       return (force archive_metadata) >>=? fun archive_metadata ->
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
         Unix.getlogin () >>| fun login ->
         [ "version"  , sexp_of_string Params.version
         ; "login"    , sexp_of_string login
@@ -181,13 +181,13 @@ end = struct
 
     let save dir =
       create () >>=? fun t ->
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
         Writer.save_sexp ~perm:info_file_perm (info_file dir) (sexp_of_t t)
       )
     ;;
 
     let load dir =
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
         Reader.load_sexp_exn (info_file dir) t_of_sexp
       )
     ;;
@@ -204,7 +204,7 @@ end = struct
              not make such an assumption and check the digests instead. Or make the files
              read-only.  We expect neither missing files (obviously), neither additional
              files (like extra cmis because they can impact the build). *)
-          Deferred.Or_error.try_with (fun () -> Sys.readdir dir)
+          Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  (fun () -> Sys.readdir dir)
           >>|? fun files ->
           let files_extracted =
             Set.diff
@@ -224,12 +224,12 @@ end = struct
     let extract () =
       if_ persistent (fun () ->
         let lock_filename = compiler_dir ^ ".lock" in
-        Monitor.try_with_or_error (fun () ->
+        Monitor.try_with_or_error ~rest:(`Log)  (fun () ->
           Unix.mkdir ~p:() ~perm:0o755 (Filename.dirname lock_filename)) >>=? fun () ->
         Lock_file_async.Nfs.create lock_filename >>=? fun () ->
         archive_lock := Archive_lock.Locked lock_filename;
         Shell.rm ~r:() ~f:() [ compiler_dir ] >>=? fun () ->
-        Monitor.try_with_or_error (fun () ->
+        Monitor.try_with_or_error ~rest:(`Log)  (fun () ->
           Unix.mkdir ~p:() ~perm:0o755 compiler_dir)
       ) >>=? fun () ->
       let destination = compiler_dir ^/ tar_id in
@@ -383,7 +383,7 @@ let with_compiler
       return (Or_error.error_s [%sexp "Shutting_down", [%here]]))
     else (
       let bag_elem = Bag.add created_but_not_cleaned compiler in
-      Deferred.Or_error.try_with_join ~extract_exn:true (fun () -> f compiler)
+      Deferred.Or_error.try_with_join ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () -> f compiler)
       >>= fun result ->
       Bag.remove created_but_not_cleaned bag_elem;
       clean compiler >>| fun r2 ->

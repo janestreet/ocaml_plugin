@@ -93,7 +93,7 @@ end = struct
     [@@deriving sexp_of]
 
     let create () =
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
         let hostname = Unix.gethostname () in
         let pid = Unix.getpid () in
         let build_info = Params.build_info_as_sexp in
@@ -118,7 +118,7 @@ end = struct
 
     let save ~info_file =
       Lazy_deferred.force_exn get >>=? fun info ->
-      Deferred.Or_error.try_with ~extract_exn:true (fun () ->
+      Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () ->
         Writer.save_sexp ~hum:true info_file info
       )
     ;;
@@ -436,7 +436,7 @@ end = struct
       ;
       target
     in
-    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+    Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () -> In_thread.run fct)
   ;;
 
 
@@ -466,7 +466,7 @@ end = struct
 
   let dynlink ?export cmxs_filename =
     let fct () = blocking_dynlink_exn ?export cmxs_filename in
-    Deferred.Or_error.try_with ~extract_exn:true (fun () -> In_thread.run fct)
+    Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  ~extract_exn:true (fun () -> In_thread.run fct)
   ;;
 
   let blocking_dynlink ?export cmxs_filename =
@@ -512,7 +512,7 @@ end = struct
 end
 
 let copy_source_files_to_working_dir ~source_dir ~working_dir =
-  Deferred.Or_error.try_with (fun () ->
+  Deferred.Or_error.try_with ~run:(`Schedule)  ~rest:(`Log)  (fun () ->
     Sys.ls_dir source_dir >>| List.filter ~f:(fun file ->
       (* We filter out some files created by emacs with names like ".#fool.ml" that we
          would fail to read because they are dead symlinks. *)

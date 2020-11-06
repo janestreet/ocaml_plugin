@@ -70,7 +70,7 @@ CAMLprim value ocaml_plugin_archive_metadata (value unit __attribute__ ((unused)
 "
 
 let generate_c_file target ~tar ~metadata =
-  Monitor.try_with ~here:[%here] (fun () ->
+  Monitor.try_with ~run:(`Schedule)  ~rest:(`Log)  ~here:[%here] (fun () ->
     Writer.with_file target ~f:(fun writer ->
       Writer.write writer (String.concat ~sep:"\n" [
         (* avoid making emacs die trying to highlight the huge string *)
