@@ -325,5 +325,5 @@ let command =
 ;;
 
 let () =
-  Exn.handle_uncaught ~exit:true (fun () -> Command.run command)
+  Exn.handle_uncaught ~exit:true (fun () -> Command_unix.run command)
 ;;

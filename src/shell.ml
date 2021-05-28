@@ -77,7 +77,7 @@ let make_run from_output ?working_dir ?env ?(quiet_or_error = false) prog args =
       let status =
         match status with
         | Some status -> Sexp.to_string
-                           ([%sexp_of: Core.Unix.Exit_or_signal.error] status)
+                           ([%sexp_of: Core_unix.Exit_or_signal.error] status)
         | None -> "error trace on stdout or stderr"
       in
       sprintf "working_dir: %s\n%sstatus: %s\ncommand: %s\n%s%s"
@@ -115,7 +115,7 @@ let chmod pathname ~perm =
 let raw_temp_dir ~in_dir ?(prefix="ocaml_plugin_") ?(suffix=".build")
       ?(perm=permission_exe) () =
   let fct () =
-    Filename.temp_dir
+    Filename_unix.temp_dir
       ~perm
       ~in_dir
       prefix

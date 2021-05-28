@@ -440,7 +440,7 @@ compilation errors and fails.
 When it is deemed safe to execute the toplevel of a plugin, one can supply the switch
 [" ; execute_plugin_toplevel_switch ; "] to check for runtime exceptions at toplevel." ])
     (let open Command.Let_syntax in
-     let%map_open plugin_filenames = anon (sequence ("path/to/plugin.ml" %: Filename.arg_type))
+     let%map_open plugin_filenames = anon (sequence ("path/to/plugin.ml" %: Filename_unix.arg_type))
      and execute_plugin_toplevel =
        flag execute_plugin_toplevel_switch no_arg
          ~doc:" Run the plugin's toplevel to check for runtime errors"

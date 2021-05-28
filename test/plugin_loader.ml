@@ -86,7 +86,7 @@ let command =
        flag "--find-dependencies" no_arg
          ~doc:" use ocamldep to generate dependencies"
      and files =
-       anon (sequence ("<ocaml-file>" %: Filename.arg_type))
+       anon (sequence ("<ocaml-file>" %: Filename_unix.arg_type))
      in
      fun () ->
        let open! Deferred.Let_syntax in
@@ -98,4 +98,4 @@ let command =
            ~find_dependencies))
 ;;
 
-let () = Command.run command
+let () = Command_unix.run command
