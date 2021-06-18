@@ -1,4 +1,4 @@
 (executables (names run)
- (libraries async core.command_unix core core_kernel ocaml_plugin
-  ocaml_plugin_sample sexplib)
+ (libraries async core.command_unix core_kernel.core ocaml_plugin
+  ocaml_plugin_sample sexplib core.sys_unix)
  (preprocess (pps ppx_jane)))

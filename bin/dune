@@ -1,6 +1,6 @@
 (executables (names ocaml_embed_compiler)
- (libraries async core.command_unix core core.filename_unix ocaml_plugin
-  sexplib)
+ (libraries async core.command_unix core_kernel.core core.filename_unix
+  ocaml_plugin sexplib)
  (preprocess (pps ppx_jane)))
 
 (install (section bin)

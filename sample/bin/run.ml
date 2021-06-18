@@ -15,7 +15,7 @@ let ocamlopt_opt = "ocamlopt.opt"
    In production, this directory would be somewhere hidden in /tmp
    and cleaned right after the end of the dynloading.
 *)
-let builddir = Filename.concat (Core.Sys.getcwd()) "_build"
+let builddir = Filename.concat (Sys_unix.getcwd()) "_build"
 
 (*
    For building this example, we use 3 config files

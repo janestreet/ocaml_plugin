@@ -1,5 +1,6 @@
 (executables (names plugin_loader) (modules plugin_loader)
- (libraries async core.command_unix core core.filename_unix ocaml_plugin)
+ (libraries async core.command_unix core_kernel.core core.filename_unix
+  ocaml_plugin)
  (preprocess (pps ppx_jane)))
 
 (alias (name runtest)

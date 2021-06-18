@@ -1,2 +1,2 @@
-(library (name ocaml_plugin_sample) (libraries core ocaml_plugin)
+(library (name ocaml_plugin_sample) (libraries core_kernel.core ocaml_plugin)
  (preprocess (pps ppx_jane)))
