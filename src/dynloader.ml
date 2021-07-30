@@ -327,8 +327,8 @@ module Compile : sig
     -> string -> packed_plugin Deferred.Or_error.t
 
   val compile_and_load_file
-    :  t
-    -> ?export:bool
+    :  ?export:bool
+    -> t
     -> compilation_directory:Compilation_directory.t
     -> basename:Core.String.Hash_set.elt
     -> (string * packed_plugin) Async.Deferred.Or_error.t
@@ -474,7 +474,8 @@ end = struct
   ;;
 
   let compile_and_load_file
-        t ?export
+        ?export
+        t
         ~compilation_directory:{ Compilation_directory.
                                  directory = working_dir
                                }
