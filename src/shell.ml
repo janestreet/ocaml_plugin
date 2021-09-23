@@ -168,7 +168,7 @@ let temp_dir ~in_dir ?prefix ?suffix ?perm () =
 let rm ?r ?f paths =
   let r = Option.map r ~f:(fun () -> "-r") in
   let f = Option.map f ~f:(fun () -> "-f") in
-  run "/bin/rm" (List.filter_map ~f:ident [r; f] @ ("--" :: paths))
+  run "/bin/rm" (List.filter_map ~f:Fn.id [r; f] @ ("--" :: paths))
 ;;
 
 let rmdir dir =
