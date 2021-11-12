@@ -2,9 +2,9 @@ open! Core
 open! Async
 
 [%%if ocaml_version >= (4, 08, 0)]
-let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 60; 66]
+let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 66]
 [%%else]
-let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58; 60]
+let default_disabled_warnings = [4; 29; 40; 41; 42; 44; 45; 48; 58]
 [%%endif]
 ;;
 

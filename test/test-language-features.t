@@ -14,9 +14,9 @@ Lazy
 Recursive modules
 
   $ cat > test.ml <<EOF
-  > module rec A : sig end = struct
+  > module rec _ : sig end = struct
   >  let () = print_endline "rec modules"
-  > end and B : sig end = struct
+  > end and _ : sig end = struct
   > end
   > EOF
   $ $TEST_DIR/plugin_loader.exe ./test.ml
