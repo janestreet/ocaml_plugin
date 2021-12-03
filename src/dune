@@ -1,5 +1,5 @@
 (library (name ocaml_plugin) (public_name ocaml_plugin)
- (libraries async core.bigstring_unix core_kernel.core dynlink
-  core.filename_unix async.lock_file_async core_kernel.uuid core.uuid
-  core_kernel.version_util)
+ (libraries async core_unix.bigstring_unix core dynlink
+  core_unix.filename_unix async.lock_file_async core_kernel.uuid
+  core_unix.uuid core_kernel.version_util)
  (c_names ocaml_fake_archive) (preprocess (pps ppx_jane ppx_optcomp)))
