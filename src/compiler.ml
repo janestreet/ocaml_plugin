@@ -343,8 +343,8 @@ let () =
 
 let is_shutting_down () =
   match Shutdown.shutting_down () with
-  | `No    -> false
-  | `Yes _ -> true
+  | No    -> false
+  | Yes _ -> true
 ;;
 
 let with_compiler
