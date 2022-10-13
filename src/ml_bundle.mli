@@ -9,7 +9,8 @@ type t [@@deriving sexp, compare]
 val from_filenames : string list -> t list Deferred.Or_error.t
 
 (* The string parameters in the result are absolute paths. *)
-val to_pathnames : t ->
-  [ `ml of string ] * [ `mli of string option ] * [ `module_name of string ]
+val to_pathnames
+  :  t
+  -> [ `ml of string ] * [ `mli of string option ] * [ `module_name of string ]
 
 val module_name : t -> string

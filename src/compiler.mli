@@ -6,6 +6,7 @@
     This is meant to be used in unix only, in particular because it uses /proc to
     determine the location of the exec code being run. *)
 open! Core
+
 open! Async
 
 (**
@@ -13,8 +14,9 @@ open! Async
    All are native executables (.opt)
 *)
 val ocamlopt_opt : string
+
 val ocamldep_opt : string
-val ppx_exe      : string
+val ppx_exe : string
 
 (** Mutable type to get the compiler and the cmi which must have been embedded in the
     executable. *)
@@ -22,8 +24,8 @@ type t
 
 module Archive_metadata : sig
   type t =
-    { ppx_is_embedded    : bool
-    ; archive_digests    : Plugin_cache.Digest.t String.Map.t
+    { ppx_is_embedded : bool
+    ; archive_digests : Plugin_cache.Digest.t String.Map.t
     }
   [@@deriving sexp_of]
 end
@@ -31,17 +33,16 @@ end
 (** List of files in the archive embedded into the current executable. *)
 val embedded_files : unit -> Plugin_cache.Digest.t String.Map.t Or_error.t
 
-type 'a create_arguments = (
-  ?persistent_archive_dirpath:string
-  (** Keep the extracted archive in some persistent location to avoid paying the cost of
-      extraction each time a file needs to be compiled.  The location passed will not be
-      cleaned at the end of the execution of the program. The only guarantee given there
-      is that it is never going to grow more than the size of the embedded archive.  If
-      the persistent location contains a extracted version that is older than the current
-      executable, the directory is cleaned up and the archive is extracted again. *)
-
-  -> 'a
-) Dynloader.create_arguments
+type 'a create_arguments =
+  (?persistent_archive_dirpath:string
+   (** Keep the extracted archive in some persistent location to avoid paying the cost of
+       extraction each time a file needs to be compiled.  The location passed will not be
+       cleaned at the end of the execution of the program. The only guarantee given there
+       is that it is never going to grow more than the size of the embedded archive.  If
+       the persistent location contains a extracted version that is older than the current
+       executable, the directory is cleaned up and the archive is extracted again. *)
+   -> 'a)
+    Dynloader.create_arguments
 
 (** This is a special utilisation of the Generic Loader.  It relies on a few assumptions,
     such as a file called ocamlopt.opt is present in the archive, as well as some cmi
@@ -57,17 +58,15 @@ type 'a create_arguments = (
     you're done with all the compilation that you want to do with this compiler.  Consider
     using [with_compiler], [Make] or [load_ocaml_src_files] if this makes your life
     simpler. *)
-val create : (
-  unit -> [`this_needs_manual_cleaning_after of t] Deferred.Or_error.t
-) create_arguments
+val create
+  : (unit -> [ `this_needs_manual_cleaning_after of t ] Deferred.Or_error.t)
+      create_arguments
 
 (** Call create, do something with the compiler, and then take care of calling clean.  In
     case an exception or a shutdown happen and f never returns, an attempt to clean the
     compiler is still done via an at_shutdown execution. *)
-val with_compiler : (
-  f:(t -> 'a Deferred.Or_error.t)
-  -> unit -> 'a Deferred.Or_error.t
-) create_arguments
+val with_compiler
+  : (f:(t -> 'a Deferred.Or_error.t) -> unit -> 'a Deferred.Or_error.t) create_arguments
 
 (** Get the loader using this compiler and these cmi. *)
 val loader : t -> Dynloader.t
@@ -81,17 +80,12 @@ val clean : t -> unit Deferred.Or_error.t
 module type S = sig
   type t
 
-  val load_ocaml_src_files : (
-    string list -> t Deferred.Or_error.t
-  ) create_arguments
+  val load_ocaml_src_files : (string list -> t Deferred.Or_error.t) create_arguments
 
-  val load_ocaml_src_files_without_running_them : (
-    string list -> (unit -> t) Deferred.Or_error.t
-  ) create_arguments
+  val load_ocaml_src_files_without_running_them
+    : (string list -> (unit -> t) Deferred.Or_error.t) create_arguments
 
-  val check_ocaml_src_files : (
-    string list -> unit Deferred.Or_error.t
-  ) create_arguments
+  val check_ocaml_src_files : (string list -> unit Deferred.Or_error.t) create_arguments
 
   (** Command that checks that the anon files given compile and match the interface [X]
       given. Also provides a [-ocamldep] mode allowing only the main file to be passed on

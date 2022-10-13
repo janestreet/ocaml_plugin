@@ -4,5 +4,6 @@ open! Core
   [Version_util] is not released and therefore not available. *)
 
 (** What we actually use from [Version_util]. *)
-val build_info_as_sexp   : Sexp.t
-val version              : string
+val build_info_as_sexp : Sexp.t
+
+val version : string
