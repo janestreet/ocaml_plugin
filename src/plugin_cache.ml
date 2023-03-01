@@ -283,12 +283,14 @@ module State = struct
     Int.compare (num_plugins_with_same what t p2) (num_plugins_with_same what t p1)
   ;;
 
-  let priority_heuristic_to_clean_plugins t =
+  let priority_heuristic_to_clean_plugins t a b =
     Comparable.lexicographic
       [ there_is_more_plugins_with_same `Filenames t
       ; there_is_more_plugins_with_same `Basenames t
       ; Plugin_in_table.older_first
       ]
+      a
+      b
   ;;
 
   let remove_internal t key =
@@ -396,7 +398,10 @@ module State = struct
            let%bind.E () = parallel ~f:Plugin.clean (Info.plugins info) in
            let cache_dir = config_dir ^/ Info.cache_dir in
            let%bind.E files = Shell.readdir cache_dir in
-           Deferred.Or_error.List.iter (Array.to_list files) ~f:(del_cmxs cache_dir))
+           Deferred.Or_error.List.iter
+             ~how:`Sequential
+             (Array.to_list files)
+             ~f:(del_cmxs cache_dir))
     in
     match%bind Info.load ~dir:config_dir with
     | Error error ->
@@ -424,7 +429,7 @@ module State = struct
         | Ok () -> add_plugin_internal t plugin
         | Error _ -> ()
       in
-      let%map () = Deferred.List.iter ~f:iter (Info.plugins info) in
+      let%map () = Deferred.List.iter ~how:`Sequential ~f:iter (Info.plugins info) in
       Ok ()
   ;;
 
@@ -465,7 +470,7 @@ module State = struct
       let cache_dir = Config.dir t.config ^/ Info.cache_dir in
       let%bind.E files = Shell.readdir cache_dir in
       let%map.E r =
-        Deferred.Or_error.List.iter (Array.to_list files) ~f:(fun file ->
+        Deferred.Or_error.List.iter ~how:`Sequential (Array.to_list files) ~f:(fun file ->
           if not (Hash_set.mem current_cmxs_basename file)
           then del_cmxs cache_dir file
           else Deferred.Or_error.return ())

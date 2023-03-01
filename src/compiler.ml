@@ -120,7 +120,7 @@ let () =
      | Some bstr ->
        Bigstring_unix.really_output stdout bstr;
        Out_channel.flush stdout);
-    Core.Caml.exit 0
+    Stdlib.exit 0
 ;;
 
 let save_archive_to destination =
@@ -325,10 +325,13 @@ let () =
      and not in the forks.  In that case, worse things could happen than deleting the
      compiler under our feet. *)
   Shutdown.at_shutdown (fun () ->
-    Deferred.List.iter (Bag.to_list created_but_not_cleaned) ~f:(fun compiler ->
-      match%map clean compiler with
-      | Ok () -> ()
-      | Error _ -> ()))
+    Deferred.List.iter
+      ~how:`Sequential
+      (Bag.to_list created_but_not_cleaned)
+      ~f:(fun compiler ->
+        match%map clean compiler with
+        | Ok () -> ()
+        | Error _ -> ()))
 ;;
 
 let is_shutting_down () =
@@ -481,7 +484,9 @@ let make_check_plugin_cmd ~check_ocaml_src_files ~load_ocaml_src_files () =
        | Error err ->
          Print.eprintf "%s\n%!" (Error.to_string_hum err);
          Shutdown.shutdown 1)
+    ~behave_nicely_in_pipeline:false
 ;;
+
 
 module type S = sig
   type t

@@ -2,7 +2,7 @@ open! Core
 open! Async
 module E = Deferred.Or_error
 
-let default_disabled_warnings = [ 4; 29; 40; 41; 42; 44; 45; 48; 58; 66 ]
+let default_disabled_warnings = [ 4; 29; 40; 41; 42; 44; 45; 48; 58; 66; 69; 70 ]
 
 (* The default policy about warnings *)
 let warnings_spec ~disabled_warnings =
@@ -487,7 +487,7 @@ let copy_source_files_to_working_dir ~source_dir ~working_dir =
         && (String.is_suffix file ~suffix:".ml"
             || String.is_suffix file ~suffix:".mli"))
     in
-    Deferred.List.iter all_ocaml_files ~f:(fun file ->
+    Deferred.List.iter ~how:`Sequential all_ocaml_files ~f:(fun file ->
       let source_file_name = source_dir ^/ file in
       Reader.with_file source_file_name ~f:(fun source_file ->
         Writer.with_file (working_dir ^/ file) ~f:(fun dest_file ->
@@ -542,7 +542,7 @@ let find_dependencies t filename =
         ~target
     in
     (* convert the topological order of compilation units into a list of files *)
-    Deferred.List.map compilation_units ~f:(fun compilation_unit ->
+    Deferred.List.map ~how:`Sequential compilation_units ~f:(fun compilation_unit ->
       (* return files from [source_dir] *)
       let ml = source_dir ^/ compilation_unit ^ ".ml" in
       let mli = ml ^ "i" in

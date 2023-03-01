@@ -199,6 +199,8 @@ let command =
            ~files_in_tar
            ~expected:(String.Set.of_hashtbl_keys embedded_files);
          Ocaml_plugin.Private.Shell.rm ~r:() ~f:() [ tmpdir ] >>| ok_exn)
+    ~behave_nicely_in_pipeline:false
 ;;
+
 
 let () = Command_unix.run command

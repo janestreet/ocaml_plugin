@@ -293,7 +293,8 @@ let main () () =
       if !load_error then load_file loader (`v1 conf_v1_error) else Deferred.return ()
     in
     let%bind () =
-      Deferred.Queue.iter ~f:(load_file loader) files >>| Ocaml_plugin_sample.Dsl.exec
+      Deferred.Queue.iter ~how:`Sequential ~f:(load_file loader) files
+      >>| Ocaml_plugin_sample.Dsl.exec
     in
     match%map if !clean then k_clean () else Deferred.return (Ok ()) with
     | Error e -> Error.raise e
@@ -303,7 +304,10 @@ let main () () =
   Deferred.never ()
 ;;
 
-let run_command = Command.async_spec ~summary ~readme (Flags.all ()) main
+let run_command =
+  Command.async_spec ~summary ~readme (Flags.all ()) main ~behave_nicely_in_pipeline:false
+;;
+
 
 let command =
   Command.group

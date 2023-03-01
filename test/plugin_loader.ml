@@ -109,6 +109,8 @@ let command =
               ?persistent_archive_dirpath
               ~trigger_unused_value_warnings_despite_mli
               ~find_dependencies))
+    ~behave_nicely_in_pipeline:false
 ;;
+
 
 let () = Command_unix.run command

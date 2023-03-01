@@ -19,6 +19,7 @@ depends: [
   "sexplib"
   "dune"        {>= "2.0.0"}
 ]
+available: arch != "arm32" & arch != "x86_32"
 synopsis: "Automatically build and dynlink OCaml source files"
 description: "
 "

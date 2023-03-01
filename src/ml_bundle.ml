@@ -102,7 +102,7 @@ let ml_with_mli_reorder filenames =
 let from_filenames filenames =
   Deferred.Or_error.try_with ~rest:`Log ~extract_exn:true (fun () ->
     let pairs = ml_with_mli_reorder filenames in
-    Deferred.List.map pairs ~f:enrich_bundle)
+    Deferred.List.map ~how:`Sequential pairs ~f:enrich_bundle)
 ;;
 
 let to_pathnames { ml; mli; module_name } = `ml ml, `mli mli, `module_name module_name
