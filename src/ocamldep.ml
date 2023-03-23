@@ -19,8 +19,7 @@ let post_process ~target lines : String.Set.t Or_error.t =
       Or_error.try_with_join (fun () ->
         if String.equal target (chop_extension target_file)
         then
-          List.fold deps ~init:set ~f:(fun set dep ->
-            Set.add set (chop_extension dep))
+          List.fold deps ~init:set ~f:(fun set dep -> Set.add set (chop_extension dep))
           |> Or_error.return
         else
           Or_error.error

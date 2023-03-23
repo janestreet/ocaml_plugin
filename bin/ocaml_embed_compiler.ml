@@ -90,8 +90,7 @@ let generate_c_file target ~tar ~metadata =
       Printf.ksprintf
         (Writer.write writer)
         ocaml_plugin_archive_metadata_template
-        (Sexp.to_string_mach
-           (Ocaml_plugin.Compiler.Archive_metadata.sexp_of_t metadata))))
+        (Sexp.to_string_mach (Ocaml_plugin.Compiler.Archive_metadata.sexp_of_t metadata))))
 ;;
 
 let command =
