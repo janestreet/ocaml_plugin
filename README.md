@@ -1,4 +1,4 @@
-ocaml_plugin - a wrapper around dynlink for OCaml
+ocaml_plugin (archived) - a wrapper around dynlink for OCaml
 =================================================
 
 ocaml_plugin is a library meant to make dynlink more easier. It offers
